@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "verimine"
+version = "0.1.0"
+description = "VeriMine-SVA: spec-less legacy RTL to SVA"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+dependencies = [
+    # Locked: slang API names and diagnostics differ between releases.
+    "pyslang==12.1.0",
+    "pydantic>=2.6,<3",
+    "ruamel.yaml>=0.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+verimine = "verimine.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

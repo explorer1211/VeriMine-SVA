@@ -1,0 +1,410 @@
+{
+  "$defs": {
+    "Assume": {
+      "additionalProperties": false,
+      "properties": {
+        "expr": {
+          "description": "SVA property body confirmed by the user",
+          "minLength": 1,
+          "title": "Expr",
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_$]*$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "expr"
+      ],
+      "title": "Assume",
+      "type": "object"
+    },
+    "Clock": {
+      "additionalProperties": false,
+      "properties": {
+        "edge": {
+          "default": "posedge",
+          "enum": [
+            "posedge",
+            "negedge"
+          ],
+          "title": "Edge",
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_$]*(\\.[A-Za-z_][A-Za-z0-9_$]*)*(\\[[0-9]+\\])?$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Clock",
+      "type": "object"
+    },
+    "Design": {
+      "additionalProperties": false,
+      "properties": {
+        "blackbox": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blackbox",
+          "type": "array"
+        },
+        "defines": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": "null means `define NAME with no value",
+          "title": "Defines",
+          "type": "object"
+        },
+        "filelist": {
+          "description": ".f files, relative to root",
+          "items": {
+            "type": "string"
+          },
+          "title": "Filelist",
+          "type": "array"
+        },
+        "files": {
+          "description": "Compile units in compile order",
+          "items": {
+            "type": "string"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "include_dirs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Include Dirs",
+          "type": "array"
+        },
+        "language": {
+          "default": "sv2017",
+          "enum": [
+            "v2001",
+            "v2005",
+            "sv2005",
+            "sv2009",
+            "sv2012",
+            "sv2017",
+            "sv2023"
+          ],
+          "title": "Language",
+          "type": "string"
+        },
+        "libext": {
+          "description": "+libext+; empty means .v .sv",
+          "items": {
+            "type": "string"
+          },
+          "title": "Libext",
+          "type": "array"
+        },
+        "library_dirs": {
+          "description": "-y",
+          "items": {
+            "type": "string"
+          },
+          "title": "Library Dirs",
+          "type": "array"
+        },
+        "library_files": {
+          "description": "-v",
+          "items": {
+            "type": "string"
+          },
+          "title": "Library Files",
+          "type": "array"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Display name; defaults to top",
+          "title": "Name"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "description": "Top-level parameter overrides",
+          "title": "Parameters",
+          "type": "object"
+        },
+        "root": {
+          "default": ".",
+          "description": "Project root, relative to the YAML file",
+          "title": "Root",
+          "type": "string"
+        },
+        "top": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_$]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Top"
+        }
+      },
+      "title": "Design",
+      "type": "object"
+    },
+    "Env": {
+      "additionalProperties": false,
+      "properties": {
+        "docker_digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "If set, replaces tool versions in env_hash",
+          "title": "Docker Digest"
+        }
+      },
+      "title": "Env",
+      "type": "object"
+    },
+    "LLM": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "default": "off",
+          "enum": [
+            "off",
+            "cloud",
+            "local"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "prompt_set_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Set Version"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider"
+        }
+      },
+      "title": "LLM",
+      "type": "object"
+    },
+    "Reset": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "enum": [
+            "low",
+            "high"
+          ],
+          "title": "Active",
+          "type": "string"
+        },
+        "clock": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Clock this reset belongs to, if more than one",
+          "title": "Clock"
+        },
+        "name": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_$]*(\\.[A-Za-z_][A-Za-z0-9_$]*)*(\\[[0-9]+\\])?$",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "async",
+            "sync"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "active",
+        "type"
+      ],
+      "title": "Reset",
+      "type": "object"
+    },
+    "Run": {
+      "additionalProperties": false,
+      "properties": {
+        "params": {
+          "additionalProperties": true,
+          "description": "Algorithm parameters",
+          "title": "Params",
+          "type": "object"
+        },
+        "profile": {
+          "default": "default",
+          "title": "Profile",
+          "type": "string"
+        },
+        "seed": {
+          "default": 1,
+          "title": "Seed",
+          "type": "integer"
+        }
+      },
+      "title": "Run",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "assumes": {
+      "items": {
+        "$ref": "#/$defs/Assume"
+      },
+      "title": "Assumes",
+      "type": "array"
+    },
+    "clocks": {
+      "items": {
+        "$ref": "#/$defs/Clock"
+      },
+      "title": "Clocks",
+      "type": "array"
+    },
+    "design": {
+      "$ref": "#/$defs/Design"
+    },
+    "env": {
+      "$ref": "#/$defs/Env"
+    },
+    "llm": {
+      "$ref": "#/$defs/LLM"
+    },
+    "resets": {
+      "items": {
+        "$ref": "#/$defs/Reset"
+      },
+      "title": "Resets",
+      "type": "array"
+    },
+    "run": {
+      "$ref": "#/$defs/Run"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "default": "draft",
+      "enum": [
+        "draft",
+        "confirmed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "unresolved": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unresolved",
+      "type": "array"
+    },
+    "waveforms": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Waveforms",
+      "type": "array"
+    }
+  },
+  "required": [
+    "design"
+  ],
+  "title": "VeriMine-SVA configuration",
+  "type": "object"
+}

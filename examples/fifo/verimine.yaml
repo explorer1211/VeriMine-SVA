@@ -1,0 +1,19 @@
+schema_version: 1
+status: confirmed
+unresolved: []
+design:
+  name: fifo_top
+  root: .
+  top: fifo_top
+  filelist: [fifo.f]
+  defines: {}
+  parameters: {}
+  language: sv2017
+  blackbox: []
+clocks: [{name: clk, edge: posedge}]
+resets: [{name: rst_n, active: low, type: async}]
+assumes:
+  - {name: no_push_when_full, expr: "full |-> !push"}
+waveforms: []
+llm: {mode: off}
+run: {seed: 1, profile: default}
