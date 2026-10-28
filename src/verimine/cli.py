@@ -36,6 +36,38 @@ def _cmd_n0(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_n1(args: argparse.Namespace) -> int:
+    from verimine.n1 import run_n1
+
+    try:
+        res = run_n1(args.config, workspace=args.workspace, write=not args.dry_run)
+    except StageError as e:
+        for i in e.issues:
+            print(f"错误 {i}", file=sys.stderr)
+        return e.exit_code
+    if args.json:
+        print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
+        return 0
+    for w in res.warnings:
+        print(f"警告 [{w['code']}] {w['message']}", file=sys.stderr)
+    insts = res.elaboration.instances
+    top_status = res.top_status
+    print(f"N1 完成：顶层状态={top_status}，实例数={len(insts)}")
+    print(f"  index_hash: {res.index_hash}")
+    for ms in res.statuses:
+        state_icon = {"OK": "✓", "OK_WITH_WARNINGS": "⚠", "BLOCKED": "✗", "CONTAINS_BLOCKED": "△"}.get(ms.status, "?")
+        suffix = f"  ← {ms.reason}" if ms.reason else ""
+        print(f"  {state_icon} {ms.path} ({ms.module}){suffix}")
+    if res.clock_domains.multi_clock_instances:
+        print("  多时钟模块（UNSUPPORTED_MULTICLOCK）：")
+        for mc in res.clock_domains.multi_clock_instances:
+            print(f"    {mc['path']}: {', '.join(mc['clocks'])}")
+    if res.db.get("new_index"):
+        n0_run = res.n0.hashes["run_hash"]
+        print(f"  索引已写入数据库；结果 runs/{n0_run}/n1.json")
+    return 0
+
+
 def _cmd_schema(args: argparse.Namespace) -> int:
     text = json_schema()
     if args.out:
@@ -55,6 +87,13 @@ def main(argv: list[str] | None = None) -> int:
     n0.add_argument("--dry-run", action="store_true", help="只校验和计算哈希，不写快照和数据库")
     n0.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
     n0.set_defaults(func=_cmd_n0)
+
+    n1 = sub.add_parser("n1", help="结构索引：elaboration、指纹、基准检查、落库")
+    n1.add_argument("config", type=Path, help="status 为 confirmed 的 YAML 配置")
+    n1.add_argument("--workspace", type=Path, help="输出目录，默认 <root>/.verimine")
+    n1.add_argument("--dry-run", action="store_true", help="只跑不写库")
+    n1.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
+    n1.set_defaults(func=_cmd_n1)
 
     sc = sub.add_parser("schema", help="导出配置的 JSON Schema")
     sc.add_argument("--out", type=Path)
