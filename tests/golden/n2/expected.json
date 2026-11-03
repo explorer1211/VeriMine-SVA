@@ -1,0 +1,43 @@
+{
+  "comment": "N2 golden set. Each label: instance, signal, role, whether the role must be recognized (structural, confidence 高 or 中). Negatives guard against false positives.",
+  "labels": [
+    ["u_fsm_case", "state", "state_register", true],
+    ["u_fsm_case", "state_nxt", "next_state", true],
+    ["u_fsm_if", "phase", "state_register", true],
+    ["u_fsm_if", "timer", "counter", true],
+    ["u_fsm_if", "timer", "state_register", false],
+    ["u_counters", "wrap_cnt", "counter", true],
+    ["u_counters", "down_cnt", "counter", true],
+    ["u_counters", "ud_cnt", "counter", true],
+    ["u_counters", "cycles", "counter", true],
+    ["u_counters", "wrap_cnt", "state_register", false],
+    ["u_shifters", "sr_left", "shift_register", true],
+    ["u_shifters", "sr_right", "shift_register", true],
+    ["u_shifters", "sr_op", "shift_register", true],
+    ["u_shifters", "lfsr", "shift_register", true],
+    ["u_shifters", "lfsr", "counter", false],
+    ["u_handshake", "in_valid", "valid", true],
+    ["u_handshake", "in_ready", "ready", true],
+    ["u_handshake", "out_valid", "valid", true],
+    ["u_handshake", "out_ready", "ready", true],
+    ["u_handshake", "bus_req", "req", true],
+    ["u_handshake", "bus_ack", "ack", true],
+    ["u_handshake", "out_valid", "state_register", false],
+    ["u_negatives", "data_q", "state_register", false],
+    ["u_negatives", "acc", "counter", false],
+    ["u_negatives", "d2", "shift_register", false],
+    ["u_negatives", "state_like_name", "state_register", false],
+    ["u_negatives", "hit", "state_register", false]
+  ],
+  "fifo_labels": [
+    ["u_ctrl", "count", "counter", true],
+    ["u_ctrl", "waddr", "counter", true],
+    ["u_ctrl", "raddr", "counter", true],
+    ["u_mem", "mem", "memory", true],
+    ["u_ctrl", "push", "push", true],
+    ["u_ctrl", "pop", "pop", true],
+    ["u_ctrl", "full", "full", true],
+    ["u_ctrl", "empty", "empty", true],
+    ["u_ctrl", "count", "state_register", false]
+  ]
+}
