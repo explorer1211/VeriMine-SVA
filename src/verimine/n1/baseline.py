@@ -86,36 +86,6 @@ def _parse_yosys(text: str) -> tuple[list[dict], list[dict]]:
     return errors, warnings
 
 
-def _slang_top_ports(comp) -> list[dict]:
-    """Extract top-level port list from a compiled slang instance."""
-    from pyslang.ast import VisitAction
-    tops = comp.getRoot().topInstances
-    if not tops:
-        return []
-    top = tops[0]
-    ports: list[dict] = []
-
-    def visitor(s):
-        if str(s.kind) == "SymbolKind.Port":
-            try:
-                ports.append({
-                    "name": s.name,
-                    "direction": str(s.direction).split(".")[-1].lower(),
-                    "type": str(s.type),
-                })
-            except Exception:
-                pass
-            return VisitAction.Skip
-        if str(s.kind) == "SymbolKind.InstanceBody":
-            if s.hierarchicalPath != top.hierarchicalPath:
-                return VisitAction.Skip
-            return VisitAction.Advance
-        return VisitAction.Skip
-
-    top.body.visit(visitor)
-    return ports
-
-
 def _yosys_top_ports(script_out: str, top: str) -> list[dict]:
     """Parse Yosys 'select -list' or hierarchy output for port names."""
     # Yosys prints "module top (\n  input clk,\n  output [3:0] q\n)" during read.
@@ -185,6 +155,32 @@ def run_verilator(
     )
 
 
+# `module m import pkg::*; (` is legal SV-2009 but Yosys' Verilog front end rejects it, while it
+# accepts the same import at file scope. Hoisting it onto the same line keeps line numbers.
+_HEADER_IMPORT_RE = re.compile(r"\b(module|interface)(\s+)(\w+)(\s+)(import\s+[\w:*,\s]+?;)")
+
+
+def _yosys_compatible(files: list[Path], tmp: Path) -> tuple[list[Path], dict[str, str]]:
+    """Copies files that need the import rewrite into tmp. Returns (files to read,
+    {temp path: original path}) so diagnostics can be mapped back."""
+    out, back = [], {}
+    for i, f in enumerate(files):
+        try:
+            text = Path(f).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            out.append(Path(f))
+            continue
+        new = _HEADER_IMPORT_RE.sub(lambda m: f"{' '.join(m.group(5).split())} {m.group(1)}{m.group(2)}{m.group(3)}{m.group(4)}", text)
+        if new == text:
+            out.append(Path(f))
+            continue
+        dst = tmp / f"{i:04d}_{Path(f).name}"
+        dst.write_text(new, encoding="utf-8")
+        out.append(dst)
+        back[str(dst)] = str(f)
+    return out, back
+
+
 def run_yosys(
     files: list[Path],
     top: str,
@@ -192,14 +188,22 @@ def run_yosys(
     defines: dict[str, str | None],
 ) -> ToolReport:
     """Run Yosys read + hierarchy -check + proc + check on the design."""
-    # Write a yosys script file
+    with tempfile.TemporaryDirectory(prefix="verimine-yosys-") as tmp:
+        return _run_yosys(files, top, include_dirs, defines, Path(tmp))
+
+
+def _run_yosys(files, top, include_dirs, defines, tmp: Path) -> ToolReport:
+    read_files, back = _yosys_compatible(files, tmp)
     read_args = []
-    for d in include_dirs:
+    # Rewritten copies live in tmp, so `include "x.vh" relative to the original file needs
+    # the original directory on the search path.
+    extra_dirs = sorted({str(Path(o).parent) for o in back.values()})
+    for d in [*include_dirs, *extra_dirs]:
         read_args.append(f"-I{d}")
     for k, v in defines.items():
         read_args.append(f"-D{k}={v}" if v is not None else f"-D{k}")
 
-    file_list = " ".join(str(f) for f in files)
+    file_list = " ".join(str(f) for f in read_files)
     read_cmd = " ".join(["read_verilog", "-sv", "-formal"] + read_args + [file_list])
     script = f"""
 {read_cmd}
@@ -222,53 +226,18 @@ select -list {top}
             warnings=[], raw_log="",
         )
 
-    errors, warnings = _parse_yosys(r.stdout + r.stderr)
-    blocked = "ERROR" in (r.stdout + r.stderr) and r.returncode != 0
+    log = r.stdout + r.stderr
+    for tmp_path, orig in back.items():
+        log = log.replace(tmp_path, orig)
+    errors, warnings = _parse_yosys(log)
+    blocked = "ERROR" in log and r.returncode != 0
     return ToolReport(
         tool="yosys",
         ok=r.returncode == 0 and not blocked,
         blocked=blocked,
         errors=errors,
         warnings=warnings,
-        raw_log=(r.stdout + r.stderr)[-4000:],
-    )
-
-
-def run_slang_baseline(comp) -> ToolReport:
-    """Use the already-built Compilation to report slang's view of the design."""
-    diags = comp.getAllDiagnostics()
-    errors: list[dict] = []
-    warnings: list[dict] = []
-    from pyslang.pyslang import DiagnosticEngine, SourceManager
-    sm = comp.getSourceManager() if hasattr(comp, "getSourceManager") else None
-    engine = DiagnosticEngine(sm) if sm is not None else None
-    for d in diags:
-        try:
-            msg = engine.formatMessage(d) if engine else str(d.code)
-        except Exception:
-            msg = str(d.code)
-        loc = ""
-        try:
-            if sm:
-                buf = sm.getBufferFromLocation(d.location)
-                path = sm.getFileName(d.location)
-                line = sm.getLineNumber(d.location)
-                col = sm.getColumnNumber(d.location)
-                loc = f"{path}:{line}:{col}"
-        except Exception:
-            pass
-        entry = {"code": str(d.code), "message": msg, "where": loc}
-        if d.isError():
-            errors.append(entry)
-        else:
-            warnings.append(entry)
-    return ToolReport(
-        tool="slang",
-        ok=len(errors) == 0,
-        blocked=False,
-        errors=errors,
-        warnings=warnings,
-        raw_log="",
+        raw_log=log[-4000:],
     )
 
 
