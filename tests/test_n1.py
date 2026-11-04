@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -330,3 +331,111 @@ def test_cli_n1_dry_run(project):
         capture_output=True, text=True,
     )
     assert r.returncode == 0
+
+
+# --------------------------------------------------------------------------- #
+# Assignments, connections, generate (index schema v2)
+# --------------------------------------------------------------------------- #
+
+def test_assignments_with_condition_stack(project):
+    project.write("rtl/top.sv", SIMPLE_SV)
+    res = _n1(project)
+    top = next(i for i in res.elaboration.instances if i.path == "top")
+    by_rhs = {json.dumps(a.rhs_tree, sort_keys=True): a for a in top.assigns if a.lhs == ["sig"]}
+    reset = next(a for a in by_rhs.values() if "const" in a.rhs_tree)
+    inc = next(a for a in by_rhs.values() if a.rhs_tree.get("op") == "+")
+    assert reset.cond_stack[0]["text"] == "!rst_n" and reset.cond_stack[0]["polarity"] is True
+    assert inc.cond_stack[0]["polarity"] is False
+    assert inc.rhs_refs == ["sig"] and not inc.blocking
+    assert top.procs[inc.proc].kind == "always_ff"
+
+
+def test_case_stack_and_continuous_assign(project):
+    project.write("rtl/top.sv", """\
+module top(input logic [1:0] s, input logic a, output logic y, output logic z);
+  always_comb begin
+    y = 1'b0;
+    case (s)
+      2'd1: y = a;
+      default: y = 1'b1;
+    endcase
+  end
+  assign z = a & s[0];
+endmodule
+""")
+    res = _n1(project)
+    top = res.elaboration.instances[0]
+    ys = [a for a in top.assigns if a.lhs == ["y"]]
+    assert [a.cond_stack[0]["kind"] if a.cond_stack else None for a in ys] == [None, "case", "case"]
+    assert ys[1].cond_stack[0]["items"] == [{"const": 1, "text": "2'd1"}]
+    assert ys[2].cond_stack[0]["default"] is True
+    assert all(a.blocking for a in ys)
+    (z,) = [a for a in top.assigns if a.lhs == ["z"]]
+    assert z.rhs_refs == ["a", "s"] and top.procs[z.proc].kind == "assign"
+
+
+def test_connections_widths_and_generate(project):
+    project.write("rtl/top.sv", """\
+module leaf(input logic a, output logic b); assign b = a; endmodule
+module top(input logic signed [3:0] s, output logic [1:0] o);
+  logic [7:0] mem [16];
+  for (genvar i = 0; i < 2; i++) begin : g
+    logic t;
+    assign t = s[i];
+    leaf u(.a(t), .b(o[i]));
+  end
+endmodule
+""")
+    res = _n1(project)
+    insts = {i.path: i for i in res.elaboration.instances}
+    assert {"top.g[0].u", "top.g[1].u"} <= set(insts)
+    conn = {c["port"]: c for c in insts["top.g[1].u"].connections}
+    assert conn["a"]["expr"] == {"ref": "g[1].t"}
+    assert conn["b"]["expr"]["op"] == "[]" and conn["b"]["expr"]["args"][0] == {"ref": "o"}
+    top = insts["top"]
+    sigs = {s.name: s for s in top.signals}
+    assert sigs["mem"].array_dims == "[0:15]" and sigs["mem"].width == 8
+    assert sigs["g[0].t"].scope == "g[0]"
+    s_port = next(p for p in top.ports if p.name == "s")
+    assert s_port.width == 4 and s_port.signed
+    assert {"top.g[0].u", "top.g[1].u"} <= set(res.fingerprints)
+
+
+def test_index_hash_ignores_comments(project):
+    project.write("rtl/top.sv", SIMPLE_SV)
+    r1 = _n1(project)
+    project.write("rtl/top.sv", SIMPLE_SV.replace("sig + 1", "sig + /* step */ 1") + "// trailing\n")
+    r2 = _n1(project)
+    assert r1.index_hash == r2.index_hash
+
+
+def test_locations_are_relative(project):
+    project.write("rtl/top.sv", SIMPLE_SV)
+    res = _n1(project)
+    top = res.elaboration.instances[0]
+    locs = [s.location for s in top.signals] + [a.location for a in top.assigns]
+    assert locs and all(l.startswith("rtl/top.sv:") for l in locs if l)
+
+
+def test_old_schema_tables_rebuilt(project):
+    project.write("rtl/top.sv", SIMPLE_SV)
+    ws = project.root / ".verimine"
+    ws.mkdir(parents=True)
+    with sqlite3.connect(ws / "verimine.db") as con:
+        con.execute("CREATE TABLE n1_port (build_hash TEXT, inst_path TEXT, name TEXT, direction TEXT,"
+                    " type_str TEXT, is_interface INTEGER, PRIMARY KEY (build_hash, inst_path, name))")
+    res = run_n1(project.yaml(), workspace=ws, tools=FAKE_TOOLS, env={}, write=True)
+    assert res.db["new_index"]
+    with sqlite3.connect(ws / "verimine.db") as con:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(n1_port)")]
+        assert "width" in cols
+        assert con.execute("SELECT count(*) FROM n1_assign").fetchone()[0] > 0
+
+
+@pytest.mark.skipif(shutil.which("yosys") is None, reason="yosys not installed")
+def test_yosys_reads_module_header_import(tmp_path):
+    root = Path(__file__).resolve().parents[1] / "examples" / "fifo"
+    shutil.copytree(root, tmp_path / "fifo", ignore=shutil.ignore_patterns(".verimine"))
+    res = run_n1(tmp_path / "fifo" / "verimine.yaml", tools=FAKE_TOOLS, env={}, write=False)
+    assert not res.yosys_report.blocked, res.yosys_report.errors
+    assert res.top_status in ("OK", "OK_WITH_WARNINGS")

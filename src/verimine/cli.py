@@ -68,6 +68,43 @@ def _cmd_n1(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_n2(args: argparse.Namespace) -> int:
+    from verimine.n2 import run_n2
+
+    try:
+        res = run_n2(args.config, workspace=args.workspace, write=not args.dry_run)
+    except StageError as e:
+        for i in e.issues:
+            print(f"错误 {i}", file=sys.stderr)
+        return e.exit_code
+    if args.json:
+        print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False, sort_keys=True))
+        return 0
+    for w in res.warnings:
+        print(f"警告 [{w['code']}] {w['message']}", file=sys.stderr)
+    g = res.vdg
+    print(f"N2 完成：建模实例 {len(g.modeled)}，跳过 {len(g.skipped)}；VDG 节点 {len(g.nodes)}，边 {len(g.edges)}")
+    print(f"  input_hash: {res.input_hash}")
+    print(f"  n2_hash:    {res.n2_hash}")
+    for f in res.fsms:
+        names = {s["value"]: s["name"] for s in f.states}
+        print(f"  状态机 {f.inst}.{f.state}（{f.confidence}）：{len(f.states)} 个状态，"
+              f"{len([t for t in f.transitions if not t['implicit']])} 条迁移，复位到 {names.get(f.reset_state, '?')}")
+    for p in res.patterns:
+        print(f"  {p.kind:<15}{p.inst}.{p.signal}（{p.confidence}）")
+    for e in res.events:
+        if e.confidence != "低":
+            sigs = " / ".join(e.signals.values())
+            print(f"  接口事件 {e.kind:<12}{e.inst}: {sigs}（{e.confidence}）")
+    top = sorted(res.pagerank.items(), key=lambda kv: (-kv[1], kv[0]))[:5]
+    if top:
+        print("  PageRank 前 5：" + "，".join(f"{n} {v:.3f}" for n, v in top))
+    print(f"  COI 目标 {len(res.cois)} 个")
+    if res.db.get("new_model"):
+        print(f"  模型已写入数据库；结果 runs/{res.n1.n0.hashes['run_hash']}/n2.json")
+    return 0
+
+
 def _cmd_infer(args: argparse.Namespace) -> int:
     from verimine.n0a import infer
 
@@ -161,6 +198,13 @@ def main(argv: list[str] | None = None) -> int:
     n1.add_argument("--dry-run", action="store_true", help="只跑不写库")
     n1.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
     n1.set_defaults(func=_cmd_n1)
+
+    n2 = sub.add_parser("n2", help="行为建模：VDG、状态机、计数器/移位寄存器/存储器、接口事件、信号角色、COI")
+    n2.add_argument("config", type=Path, help="status 为 confirmed 的 YAML 配置")
+    n2.add_argument("--workspace", type=Path, help="输出目录，默认 <root>/.verimine")
+    n2.add_argument("--dry-run", action="store_true", help="只跑不写库")
+    n2.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
+    n2.set_defaults(func=_cmd_n2)
 
     inf = sub.add_parser("infer", help="N0a 配置补全：从 RTL / .f / 不完整的 YAML 生成 YAML 草稿和推断报告")
     inf.add_argument("root", type=Path, nargs="?", default=Path("."), help="RTL 所在目录（给了 --config 时忽略）")

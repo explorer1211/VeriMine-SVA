@@ -10,8 +10,12 @@ Schema (separate from N0's verimine.db for clean separation):
   - n1_driver: driver relationships per instance
   - n1_module_status: module status judgments
   - n1_fingerprint: instance path -> fingerprint
+  - n1_assign: assignments (lhs, rhs expression tree, control-condition stack, blocking)
+  - n1_connection: how each instance's ports are connected in its parent
 
-All writes are idempotent (INSERT OR IGNORE on primary keys).
+All writes are idempotent (INSERT OR IGNORE on primary keys). The index is derived data, so
+when the stored schema version differs from SCHEMA_VERSION the n1_* tables are dropped and
+rebuilt instead of migrated.
 """
 
 from __future__ import annotations
@@ -25,10 +29,17 @@ from .elaborate import InstanceInfo, ElaborationResult
 from .status import ModuleStatus
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+_TABLES = ("n1_index", "n1_instance", "n1_port", "n1_signal", "n1_proc", "n1_driver",
+           "n1_module_status", "n1_fingerprint", "n1_assign", "n1_connection", "n1_meta")
 
 _DDL = """
 PRAGMA journal_mode=WAL;
+
+CREATE TABLE IF NOT EXISTS n1_meta (
+    schema_version  INTEGER NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS n1_index (
     build_hash      TEXT PRIMARY KEY,
@@ -57,6 +68,8 @@ CREATE TABLE IF NOT EXISTS n1_port (
     direction   TEXT NOT NULL,
     type_str    TEXT NOT NULL,
     is_interface INTEGER NOT NULL DEFAULT 0,
+    width       INTEGER NOT NULL,
+    signed      INTEGER NOT NULL,
     PRIMARY KEY (build_hash, inst_path, name)
 );
 
@@ -67,6 +80,10 @@ CREATE TABLE IF NOT EXISTS n1_signal (
     kind        TEXT NOT NULL,
     type_str    TEXT NOT NULL,
     location    TEXT NOT NULL,
+    width       INTEGER NOT NULL,
+    signed      INTEGER NOT NULL,
+    array_dims  TEXT NOT NULL,
+    scope       TEXT NOT NULL,
     PRIMARY KEY (build_hash, inst_path, name)
 );
 
@@ -77,6 +94,7 @@ CREATE TABLE IF NOT EXISTS n1_proc (
     kind         TEXT NOT NULL,
     sensitivity  TEXT NOT NULL,
     location     TEXT NOT NULL,
+    scope        TEXT NOT NULL,
     PRIMARY KEY (build_hash, inst_path, seq)
 );
 
@@ -102,6 +120,30 @@ CREATE TABLE IF NOT EXISTS n1_module_status (
     PRIMARY KEY (build_hash, path)
 );
 
+CREATE TABLE IF NOT EXISTS n1_assign (
+    build_hash   TEXT NOT NULL,
+    inst_path    TEXT NOT NULL,
+    seq          INTEGER NOT NULL,
+    proc         INTEGER,
+    lhs          TEXT NOT NULL,
+    lhs_tree     TEXT NOT NULL,
+    rhs_tree     TEXT NOT NULL,
+    rhs_refs     TEXT NOT NULL,
+    cond_stack   TEXT NOT NULL,
+    blocking     INTEGER NOT NULL,
+    location     TEXT NOT NULL,
+    PRIMARY KEY (build_hash, inst_path, seq)
+);
+
+CREATE TABLE IF NOT EXISTS n1_connection (
+    build_hash   TEXT NOT NULL,
+    inst_path    TEXT NOT NULL,
+    port         TEXT NOT NULL,
+    direction    TEXT NOT NULL,
+    expr         TEXT,
+    PRIMARY KEY (build_hash, inst_path, port)
+);
+
 CREATE TABLE IF NOT EXISTS n1_fingerprint (
     build_hash  TEXT NOT NULL,
     inst_path   TEXT NOT NULL,
@@ -114,6 +156,24 @@ CREATE TABLE IF NOT EXISTS n1_fingerprint (
 def _iso_now() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat()
+
+
+def _ensure_schema(con: sqlite3.Connection) -> None:
+    have = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    version = None
+    if "n1_meta" in have:
+        row = con.execute("SELECT schema_version FROM n1_meta").fetchone()
+        version = row[0] if row else None
+    if have & set(_TABLES) and version != SCHEMA_VERSION:
+        for t in _TABLES:
+            con.execute(f"DROP TABLE IF EXISTS {t}")
+    con.executescript(_DDL)
+    if con.execute("SELECT count(*) FROM n1_meta").fetchone()[0] == 0:
+        con.execute("INSERT INTO n1_meta VALUES (?)", (SCHEMA_VERSION,))
+
+
+def _j(x) -> str:
+    return json.dumps(x, sort_keys=True, ensure_ascii=False)
 
 
 def write_index(
@@ -129,7 +189,7 @@ def write_index(
     """
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as con:
-        con.executescript(_DDL)
+        _ensure_schema(con)
 
         # n1_index — skip if already written
         existing = con.execute(
@@ -155,21 +215,33 @@ def write_index(
             )
             for p in inst.ports:
                 con.execute(
-                    "INSERT OR IGNORE INTO n1_port VALUES (?,?,?,?,?,?)",
+                    "INSERT OR IGNORE INTO n1_port VALUES (?,?,?,?,?,?,?,?)",
                     (build_hash, inst.path, p.name, p.direction,
-                     p.type_str, int(p.is_interface)),
+                     p.type_str, int(p.is_interface), p.width, int(p.signed)),
                 )
             for s in inst.signals:
                 con.execute(
-                    "INSERT OR IGNORE INTO n1_signal VALUES (?,?,?,?,?,?)",
+                    "INSERT OR IGNORE INTO n1_signal VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (build_hash, inst.path, s.name, s.kind,
-                     s.type_str, s.location),
+                     s.type_str, s.location, s.width, int(s.signed), s.array_dims, s.scope),
                 )
             for seq, proc in enumerate(inst.procs):
                 con.execute(
-                    "INSERT OR IGNORE INTO n1_proc VALUES (?,?,?,?,?,?)",
+                    "INSERT OR IGNORE INTO n1_proc VALUES (?,?,?,?,?,?,?)",
                     (build_hash, inst.path, seq, proc.kind,
-                     json.dumps(proc.sensitivity), proc.location),
+                     json.dumps(proc.sensitivity), proc.location, proc.scope),
+                )
+            for seq, a in enumerate(inst.assigns):
+                con.execute(
+                    "INSERT OR IGNORE INTO n1_assign VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (build_hash, inst.path, seq, a.proc, _j(a.lhs), _j(a.lhs_tree),
+                     _j(a.rhs_tree), _j(a.rhs_refs), _j(a.cond_stack), int(a.blocking), a.location),
+                )
+            for c in inst.connections:
+                con.execute(
+                    "INSERT OR IGNORE INTO n1_connection VALUES (?,?,?,?,?)",
+                    (build_hash, inst.path, c["port"], c["direction"],
+                     None if c["expr"] is None else _j(c["expr"])),
                 )
             for seq, drv in enumerate(inst.drivers):
                 con.execute(

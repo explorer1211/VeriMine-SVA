@@ -22,6 +22,8 @@ from pyslang.syntax import SyntaxTree
 from pyslang.pyslang import Bag, SourceManager
 from pyslang.parsing import PreprocessorOptions
 
+from .elaborate import iter_child_instances
+
 
 def _module_tokens(syn_node) -> list[str]:
     """
@@ -127,18 +129,8 @@ def compute_fingerprints(
 
         child_fps: list[str] = []
 
-        def child_visitor(s):
-            if str(s.kind) == "SymbolKind.InstanceBody":
-                if s.hierarchicalPath != path:
-                    return VisitAction.Skip
-                return VisitAction.Advance
-            if str(s.kind) == "SymbolKind.Instance":
-                child_fp = _walk(s)
-                child_fps.append(child_fp)
-                return VisitAction.Skip
-            return VisitAction.Skip
-
-        sym.body.visit(child_visitor)
+        for child in iter_child_instances(body):
+            child_fps.append(_walk(child))
 
         tokens = _def_tokens(body)
         fp = _hash_tokens(tokens, params, child_fps)

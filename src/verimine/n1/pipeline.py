@@ -17,9 +17,9 @@ from ..n0.pipeline import N0Result, run_n0
 from ..issues import IssueLog, StageError
 from .elaborate import elaborate, ElaborationResult, InstanceInfo
 from .fingerprint import compute_fingerprints
-from .baseline import run_verilator, run_yosys, run_slang_baseline, cross_check_ports, ToolReport
+from .baseline import run_verilator, run_yosys, cross_check_ports, ToolReport
 from .status import judge_status, ModuleStatus
-from .store import write_index
+from .store import SCHEMA_VERSION, write_index
 
 
 # --------------------------------------------------------------------------- #
@@ -182,6 +182,7 @@ def _compute_index_hash(
     check: same build_hash → same index_hash.
     """
     obj = {
+        "schema_version": SCHEMA_VERSION,
         "instances": [
             {
                 "path": i.path,
@@ -190,17 +191,27 @@ def _compute_index_hash(
                 "params": sorted(i.params.items()),
                 "ports": [
                     {"name": p.name, "direction": p.direction,
-                     "type": p.type_str, "iface": p.is_interface}
+                     "type": p.type_str, "iface": p.is_interface,
+                     "width": p.width, "signed": p.signed}
                     for p in sorted(i.ports, key=lambda x: x.name)
                 ],
                 "signals": [
-                    {"name": s.name, "kind": s.kind, "type": s.type_str}
+                    {"name": s.name, "kind": s.kind, "type": s.type_str,
+                     "width": s.width, "signed": s.signed, "dims": s.array_dims, "scope": s.scope}
                     for s in sorted(i.signals, key=lambda x: x.name)
                 ],
                 "procs": [
-                    {"kind": p.kind, "sensitivity": p.sensitivity}
+                    {"kind": p.kind, "sensitivity": p.sensitivity, "scope": p.scope}
                     for p in i.procs
                 ],
+                # Source locations are left out on purpose: moving code or editing a comment
+                # must not make N2 and later stages think the structure changed.
+                "assigns": [
+                    {"proc": a.proc, "lhs": a.lhs, "lhs_tree": a.lhs_tree, "rhs": a.rhs_tree,
+                     "cond": a.cond_stack, "blocking": a.blocking}
+                    for a in i.assigns
+                ],
+                "connections": sorted(i.connections, key=lambda c: c["port"]),
             }
             for i in sorted(elab.instances, key=lambda x: x.path)
         ],
@@ -210,7 +221,7 @@ def _compute_index_hash(
         ],
         "fingerprints": sorted(fingerprints.items()),
     }
-    payload = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+    payload = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     raw = b"verimine/index/v1\x00" + payload.encode()
     return hashlib.sha256(raw).hexdigest()
 
@@ -258,6 +269,8 @@ class N1Result:
                 "clk_rst_candidates": [dataclasses.asdict(c) for c in i.clk_rst_candidates],
                 "clocks": sorted(i.clocks),
                 "is_incomplete": i.is_incomplete,
+                "assigns": [dataclasses.asdict(a) for a in i.assigns],
+                "connections": i.connections,
             }
 
         return {

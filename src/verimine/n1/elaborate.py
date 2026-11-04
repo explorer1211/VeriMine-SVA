@@ -34,6 +34,8 @@ from pyslang.pyslang import (
 )
 from pyslang.parsing import PreprocessorOptions
 
+from .assign import AssignInfo, Extractor
+
 
 @dataclasses.dataclass
 class PortInfo:
@@ -41,14 +43,20 @@ class PortInfo:
     direction: str       # "in" | "out" | "inout" | "ref"
     type_str: str
     is_interface: bool
+    width: int = 0
+    signed: bool = False
 
 
 @dataclasses.dataclass
 class SignalInfo:
-    name: str
+    name: str            # relative to the instance, e.g. "g_lane[1].tmp" inside a generate block
     kind: str            # "net" | "variable"
     type_str: str
     location: str        # "file:line"
+    width: int = 0       # element width for arrays
+    signed: bool = False
+    array_dims: str = ""  # unpacked dimensions, e.g. "[0:15]"; non-empty = memory candidate
+    scope: str = ""      # enclosing generate block, relative to the instance ("" = module level)
 
 
 @dataclasses.dataclass
@@ -56,6 +64,7 @@ class ProcInfo:
     kind: str            # "always_ff" | "always_comb" | "always_latch" | "always" | "assign" | "initial"
     sensitivity: list[dict]  # [{"signal": "clk", "edge": "posedge"}, ...]
     location: str
+    scope: str = ""      # enclosing generate block, relative to the instance
 
 
 @dataclasses.dataclass
@@ -87,6 +96,9 @@ class InstanceInfo:
     clk_rst_candidates: list[ClockResetCandidate]
     clocks: set[str]     # clock signal names seen in this instance
     is_incomplete: bool  # true if elaboration had errors in this scope
+    assigns: list[AssignInfo] = dataclasses.field(default_factory=list)
+    # How the parent connects this instance: [{"port", "direction", "expr"}], expr in parent names
+    connections: list[dict] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -136,6 +148,29 @@ def _proc_kind_str(k) -> str:
     return mapping.get(s, s.split(".")[-1].lower())
 
 
+def _relative_loc(loc: str, root: Path) -> str:
+    """'/abs/root/rtl/a.sv:3:5' -> 'rtl/a.sv:3:5'. The index must not contain absolute paths."""
+    if not loc:
+        return loc
+    path, sep, rest = loc.partition(":")
+    try:
+        p = Path(path)
+        if p.is_absolute():
+            path = p.resolve().relative_to(root.resolve()).as_posix()
+    except (ValueError, OSError):
+        pass
+    return path + sep + rest
+
+
+def _relativize(instances: list[InstanceInfo], diags: list[dict], root: Path) -> None:
+    for inst in instances:
+        for group in (inst.signals, inst.procs, inst.drivers, inst.assigns):
+            for x in group:
+                x.location = _relative_loc(x.location, root)
+    for d in diags:
+        d["where"] = _relative_loc(d.get("where", ""), root)
+
+
 def _location_str(sm: SourceManager, loc) -> str:
     if loc is None:
         return ""
@@ -178,17 +213,62 @@ def _sensitivity(sm: SourceManager, proc: ProceduralBlockSymbol) -> list[dict]:
     return result
 
 
+_SCOPE_KINDS = ("SymbolKind.GenerateBlock", "SymbolKind.GenerateBlockArray")
+
+
+def _type_facts(t) -> tuple[int, bool, str]:
+    """(element width, signed, unpacked dims) of a slang type."""
+    dims = ""
+    s = str(t)
+    if "$" in s:
+        dims = s.split("$", 1)[1]
+    try:
+        for _ in range(8):
+            if not t.isUnpackedArray:
+                break
+            t = t.arrayElementType
+        return int(t.bitWidth), bool(t.isSigned), dims
+    except Exception:
+        return 0, False, dims
+
+
+def iter_child_instances(body):
+    """Instances directly under `body`, looking through instantiated generate blocks and
+    instance arrays. Uninstantiated generate branches are skipped."""
+    found = []
+
+    def visit(s):
+        k = str(s.kind)
+        if not k.startswith("SymbolKind."):
+            return VisitAction.Skip
+        if k == "SymbolKind.InstanceBody":
+            return VisitAction.Advance if s is body or s.hierarchicalPath == body.hierarchicalPath else VisitAction.Skip
+        if k in _SCOPE_KINDS:
+            return VisitAction.Skip if getattr(s, "isUninstantiated", False) else VisitAction.Advance
+        if k == "SymbolKind.InstanceArray":
+            return VisitAction.Advance
+        if k == "SymbolKind.Instance":
+            found.append(s)
+            return VisitAction.Skip
+        return VisitAction.Skip
+
+    body.visit(visit)
+    return found
+
+
 def _collect_instance(
     sym: InstanceSymbol,
     sm: SourceManager,
     mgr: AnalysisManager,
     parent_path: str | None,
     root_path: Path,
+    connections: list[dict] | None = None,
 ) -> InstanceInfo:
     body = sym.body
     path = sym.hierarchicalPath
     module = body.definition.name
-    loc = _location_str(sm, sym.location)
+    loc_of = lambda l: _location_str(sm, l)  # noqa: E731
+    ex = Extractor(path, body, loc_of)
 
     # params
     params: dict[str, Any] = {}
@@ -199,46 +279,62 @@ def _collect_instance(
         except Exception:
             params[p.name] = None
 
-    # ports, signals, procs, drivers
+    # ports, signals, procs, drivers, assignments
     ports: list[PortInfo] = []
     signals: list[SignalInfo] = []
     procs: list[ProcInfo] = []
     drivers: list[DriverInfo] = []
+    assigns: list[AssignInfo] = []
     clocks: set[str] = set()
+
+    for s in body.portList:
+        if str(s.kind) != "SymbolKind.Port":
+            continue
+        try:
+            t = str(s.type)
+            width, signed, _ = _type_facts(s.type)
+        except Exception:
+            t, width, signed = "", 0, False
+        ports.append(PortInfo(
+            name=s.name,
+            direction=_dir_str(s.direction),
+            type_str=t,
+            is_interface="interface" in t.lower() or "modport" in t.lower(),
+            width=width,
+            signed=signed,
+        ))
+    port_names = {p.name for p in ports}
+
+    def scope_of(s) -> str:
+        name = ex.rel(s) or s.name
+        return name.rsplit(".", 1)[0] if "." in name else ""
 
     def visitor(s):
         k = str(s.kind)
+        if not k.startswith("SymbolKind."):
+            return VisitAction.Skip
         if k == "SymbolKind.InstanceBody":
             if s.hierarchicalPath != path:
                 return VisitAction.Skip
             return VisitAction.Advance
-        if k == "SymbolKind.Instance":
-            return VisitAction.Skip  # handled recursively
-        if k == "SymbolKind.Port":
-            try:
-                t = str(s.type)
-                is_iface = "interface" in t.lower() or s.isNetPort is False and "modport" in t.lower()
-            except Exception:
-                t = ""
-                is_iface = False
-            ports.append(PortInfo(
-                name=s.name,
-                direction=_dir_str(s.direction),
-                type_str=t,
-                is_interface=is_iface,
-            ))
-            return VisitAction.Skip
+        if k in _SCOPE_KINDS:
+            return VisitAction.Skip if getattr(s, "isUninstantiated", False) else VisitAction.Advance
+        if k in ("SymbolKind.Instance", "SymbolKind.InstanceArray", "SymbolKind.Port"):
+            return VisitAction.Skip  # instances handled recursively; ports above
         if k in ("SymbolKind.Variable", "SymbolKind.Net"):
-            # Skip internal copies of ports (same name)
-            if any(p.name == s.name for p in ports):
-                return VisitAction.Skip
-            t = str(s.type)
-            signals.append(SignalInfo(
-                name=s.name,
-                kind="net" if k == "SymbolKind.Net" else "variable",
-                type_str=t,
-                location=_location_str(sm, s.location),
-            ))
+            name = ex.rel(s) or s.name
+            if name not in port_names:  # internal symbols backing ports are not new signals
+                width, signed, dims = _type_facts(s.type)
+                signals.append(SignalInfo(
+                    name=name,
+                    kind="net" if k == "SymbolKind.Net" else "variable",
+                    type_str=str(s.type),
+                    location=loc_of(s.location),
+                    width=width,
+                    signed=signed,
+                    array_dims=dims,
+                    scope=scope_of(s),
+                ))
             # collect drivers
             try:
                 for d in mgr.getDrivers(s):
@@ -247,10 +343,10 @@ def _collect_instance(
                     if str(cs.kind) == "SymbolKind.ProceduralBlock":
                         pk = _proc_kind_str(cs.procedureKind)
                     drivers.append(DriverInfo(
-                        signal=s.name,
+                        signal=name,
                         driver_kind=str(d.kind).split(".")[-1],
                         proc_kind=pk,
-                        location=_location_str(sm, d.sourceRange.start if hasattr(d, "sourceRange") else None),
+                        location=loc_of(d.sourceRange.start if hasattr(d, "sourceRange") else None),
                     ))
             except Exception:
                 pass
@@ -265,11 +361,19 @@ def _collect_instance(
             procs.append(ProcInfo(
                 kind=pk,
                 sensitivity=sens,
-                location=_location_str(sm, s.location),
+                location=loc_of(s.location),
+                scope=scope_of(s),
             ))
+            try:
+                ex.statement(s.body, len(procs) - 1, [], assigns)
+            except Exception:
+                pass
             return VisitAction.Skip
         if k == "SymbolKind.ContinuousAssign":
-            procs.append(ProcInfo(kind="assign", sensitivity=[], location=_location_str(sm, s.location)))
+            procs.append(ProcInfo(kind="assign", sensitivity=[], location=loc_of(s.location), scope=scope_of(s)))
+            for a in ex.continuous(s):
+                a.proc = len(procs) - 1
+                assigns.append(a)
             return VisitAction.Skip
         return VisitAction.Advance
 
@@ -323,7 +427,23 @@ def _collect_instance(
         clk_rst_candidates=dedup_cands,
         clocks=clocks,
         is_incomplete=False,
+        assigns=assigns,
+        connections=connections or [],
     )
+
+
+def _connections(child, parent_ex: Extractor) -> list[dict]:
+    out = []
+    try:
+        for pc in child.portConnections:
+            out.append({
+                "port": pc.port.name,
+                "direction": _dir_str(pc.port.direction),
+                "expr": parent_ex.tree(pc.expression) if pc.expression is not None else None,
+            })
+    except Exception:
+        pass
+    return out
 
 
 def _walk_tree(
@@ -333,20 +453,13 @@ def _walk_tree(
     parent_path: str | None,
     root_path: Path,
     out: list[InstanceInfo],
+    connections: list[dict] | None = None,
 ) -> None:
-    info = _collect_instance(sym, sm, mgr, parent_path, root_path)
+    info = _collect_instance(sym, sm, mgr, parent_path, root_path, connections)
     out.append(info)
-    # recurse into sub-instances
-    def child_visitor(s):
-        if str(s.kind) == "SymbolKind.InstanceBody":
-            if s.hierarchicalPath != info.path:
-                return VisitAction.Skip
-            return VisitAction.Advance
-        if str(s.kind) == "SymbolKind.Instance":
-            _walk_tree(s, sm, mgr, info.path, root_path, out)
-            return VisitAction.Skip
-        return VisitAction.Skip
-    sym.body.visit(child_visitor)
+    ex = Extractor(info.path, sym.body, lambda l: _location_str(sm, l))
+    for child in iter_child_instances(sym.body):
+        _walk_tree(child, sm, mgr, info.path, root_path, out, _connections(child, ex))
 
 
 # --------------------------------------------------------------------------- #
@@ -425,6 +538,7 @@ def elaborate(
     instances: list[InstanceInfo] = []
     if top_inst is not None:
         _walk_tree(top_inst, sm, mgr, None, root, instances)
+        _relativize(instances, errors + warnings, root)
         # mark all instances incomplete if there are errors
         if errors:
             for inst in instances:
