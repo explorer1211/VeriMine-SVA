@@ -105,6 +105,40 @@ def _cmd_n2(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_n2b(args: argparse.Namespace) -> int:
+    from verimine.n2b import run_n2b
+
+    try:
+        res = run_n2b(args.config, workspace=args.workspace, write=not args.dry_run,
+                      formal=not args.no_formal, depth=args.depth, timeout=args.timeout)
+    except StageError as e:
+        for i in e.issues:
+            print(f"错误 {i}", file=sys.stderr)
+        return e.exit_code
+    if args.json:
+        print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False, sort_keys=True))
+        return 0
+    for w in res.warnings:
+        print(f"警告 [{w['code']}] {w['message']}", file=sys.stderr)
+    e = res.engine
+    st: dict[str, int] = {}
+    for p in res.props:
+        st[p.status] = st.get(p.status, 0) + 1
+    print(f"N2b 完成：发现 {len(res.findings)} 条，其中候选 RTL 缺陷 {len(res.defects)} 条；"
+          f"属性 {len(res.props)} 条（" + "，".join(f"{k} {v}" for k, v in sorted(st.items())) + "）")
+    print("  引擎：" + (f"SymbiYosys smtbmc {e.solver}，深度 {e.depth}" if e.available else "未运行"))
+    print(f"  input_hash: {res.input_hash}")
+    print(f"  n2b_hash:   {res.n2b_hash}")
+    for k, s in res.summary().items():
+        if s["findings"] or s["asserts"] or s["covers"]:
+            print(f"  {s['name']:<10} 发现 {s['findings']:>3}   断言 {s['asserts']:>3}   cover {s['covers']:>3}")
+    for f in res.defects[:10]:
+        print(f"  [缺陷] {f.inst}: {f.message}")
+    if res.db.get("new_result"):
+        print(f"  报告 runs/{res.n2.n1.n0.hashes['run_hash']}/n2b_report.md，交付版断言 n2b_bind.sv")
+    return 0
+
+
 def _cmd_infer(args: argparse.Namespace) -> int:
     from verimine.n0a import infer
 
@@ -205,6 +239,16 @@ def main(argv: list[str] | None = None) -> int:
     n2.add_argument("--dry-run", action="store_true", help="只跑不写库")
     n2.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
     n2.set_defaults(func=_cmd_n2)
+
+    n2b = sub.add_parser("n2b", help="结构性检查：按模板生成断言和 cover，形式验证，输出结构性检查报告")
+    n2b.add_argument("config", type=Path, help="status 为 confirmed 的 YAML 配置")
+    n2b.add_argument("--workspace", type=Path, help="输出目录，默认 <root>/.verimine")
+    n2b.add_argument("--dry-run", action="store_true", help="只跑不写库")
+    n2b.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
+    n2b.add_argument("--no-formal", action="store_true", help="不跑形式验证，只出静态结论和交付版断言")
+    n2b.add_argument("--depth", type=int, help="BMC / 归纳深度，默认 20（run.params.n2b_depth）")
+    n2b.add_argument("--timeout", type=int, help="每个 sby 任务的超时秒数，默认 120")
+    n2b.set_defaults(func=_cmd_n2b)
 
     inf = sub.add_parser("infer", help="N0a 配置补全：从 RTL / .f / 不完整的 YAML 生成 YAML 草稿和推断报告")
     inf.add_argument("root", type=Path, nargs="?", default=Path("."), help="RTL 所在目录（给了 --config 时忽略）")

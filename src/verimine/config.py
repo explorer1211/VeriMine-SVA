@@ -66,6 +66,14 @@ class Assume(_Strict):
     expr: str = Field(min_length=1, description="SVA property body confirmed by the user")
 
 
+class Registers(_Strict):
+    file: str = Field(description="Register map, CSV or IP-XACT XML, relative to root")
+    format: Literal["csv", "ipxact"] | None = Field(None, description="Default: from the file suffix")
+    scope: str | None = Field(None, description="Instance path holding the registers; default: top")
+    addr: str | None = Field(None, pattern=SIGNAL_RE, description="Address signal in scope, for decode checks")
+    write: str | None = Field(None, pattern=SIGNAL_RE, description="Write-enable signal in scope")
+
+
 class LLM(_Strict):
     mode: Literal["off", "cloud", "local"] = "off"
     provider: str | None = None
@@ -94,6 +102,7 @@ class Config(_Strict):
     resets: list[Reset] = Field(default_factory=list)
     assumes: list[Assume] = Field(default_factory=list)
     waveforms: list[str] = Field(default_factory=list)
+    registers: Registers | None = Field(None, description="Register map for N2b register checks")
     llm: LLM = Field(default_factory=LLM)
     run: Run = Field(default_factory=Run)
     env: Env = Field(default_factory=Env)

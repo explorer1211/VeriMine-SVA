@@ -266,6 +266,79 @@
       "title": "LLM",
       "type": "object"
     },
+    "Registers": {
+      "additionalProperties": false,
+      "properties": {
+        "addr": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_$]*(\\.[A-Za-z_][A-Za-z0-9_$]*)*(\\[[0-9]+\\])?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Address signal in scope, for decode checks",
+          "title": "Addr"
+        },
+        "file": {
+          "description": "Register map, CSV or IP-XACT XML, relative to root",
+          "title": "File",
+          "type": "string"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "enum": [
+                "csv",
+                "ipxact"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default: from the file suffix",
+          "title": "Format"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Instance path holding the registers; default: top",
+          "title": "Scope"
+        },
+        "write": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_$]*(\\.[A-Za-z_][A-Za-z0-9_$]*)*(\\[[0-9]+\\])?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Write-enable signal in scope",
+          "title": "Write"
+        }
+      },
+      "required": [
+        "file"
+      ],
+      "title": "Registers",
+      "type": "object"
+    },
     "Reset": {
       "additionalProperties": false,
       "properties": {
@@ -361,6 +434,18 @@
     },
     "llm": {
       "$ref": "#/$defs/LLM"
+    },
+    "registers": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Registers"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Register map for N2b register checks"
     },
     "resets": {
       "items": {

@@ -172,6 +172,12 @@ def load(config_path: Path, env: dict[str, str] | None = None) -> Loaded:
 
     waveforms = [r for w in cfg.waveforms if (r := paths.check(Path(w), f"{where}: waveforms")) is not None]
 
+    registers = None
+    if cfg.registers is not None:
+        rel = paths.check(Path(cfg.registers.file), f"{where}: registers.file")
+        if rel is not None:
+            registers = cfg.registers.model_dump() | {"file": rel}
+
     lib_dir_files = sorted(
         (Path(dr) / f.name).as_posix()
         for dr in norm_lib_dirs
@@ -205,6 +211,8 @@ def load(config_path: Path, env: dict[str, str] | None = None) -> Loaded:
         "run": cfg.run.model_dump(),
         "env": cfg.env.model_dump(),
     }
+    if registers is not None:  # only present when configured, so other configs hash as before
+        normalized["registers"] = registers
     return Loaded(config_path, root, cfg, normalized, lib_dir_files, log)
 
 
