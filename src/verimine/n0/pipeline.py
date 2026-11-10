@@ -100,6 +100,8 @@ def run_n0(
                         (includes, "include")):
         for p in paths:
             roles.setdefault(p, role)
+    if normalized.get("registers"):  # N2b reads it: its content belongs in the source hash
+        roles.setdefault(normalized["registers"]["file"], "registers")
     sources, blobs = [], {}
     for p in sorted(roles):
         h, data = file_hash(root / p)

@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS revision_file (
     revision_id  TEXT NOT NULL REFERENCES revision(id),
     path         TEXT NOT NULL,     -- relative to root
     sha256       TEXT NOT NULL,     -- object key in the snapshot store
-    role         TEXT NOT NULL,     -- source | library | include
+    role         TEXT NOT NULL,     -- source | library | include | registers
     PRIMARY KEY (revision_id, path)
 );
 CREATE TABLE IF NOT EXISTS run (

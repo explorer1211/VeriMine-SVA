@@ -89,6 +89,8 @@ def text(t: dict) -> str:
     op, args = t.get("op"), t.get("args", [])
     if op == "opaque":
         return "f(" + ", ".join(t.get("refs", [])) + ")"
+    if op == "xz":
+        return t.get("text", "'x")
     if op in ("!", "~", "u-", "u+"):
         inner = text(args[0])
         return f"{op.lstrip('u')}{inner}" if "ref" in args[0] or "const" in args[0] else f"{op.lstrip('u')}({inner})"

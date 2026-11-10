@@ -10,6 +10,7 @@ registers, state transitions) without going back to slang:
     {"const": 1, "text": "4'd1"}           anything that folds to a constant (literals,
                                            parameters, enum values, constant expressions)
     {"op": "+", "args": [...]}             operators, selects, concatenation, ?:, calls
+    {"op": "xz", "x": .., "z": .., ...}    a constant with x or z bits ('x, 'z, 4'b10zz)
     {"op": "opaque", "refs": [...]}        anything else; only the signals it reads are kept
 
 Every name is relative to the instance body, e.g. "g_lane[1].tmp" for a signal inside a
@@ -43,6 +44,8 @@ _UN = {
     "BitwiseNand": "~&r", "BitwiseNor": "~|r", "BitwiseXnor": "~^r",
     "Preincrement": "++", "Postincrement": "++", "Predecrement": "--", "Postdecrement": "--",
 }
+_CASE_COND = {"Normal": "case", "WildcardJustZ": "casez", "WildcardXOrZ": "casex", "Inside": "inside"}
+_CASE_CHECK = {"Unique": "unique", "Unique0": "unique0", "Priority": "priority"}
 _SIGNAL_KINDS = {"SymbolKind.Variable", "SymbolKind.Net", "SymbolKind.Port"}
 _COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 _LIT_RE = re.compile(r"^(?:\d+)?'s?([bodh])([0-9a-fA-F_]+)$")
@@ -142,6 +145,20 @@ class Extractor:
         except Exception:
             return None
 
+    def _xz(self, expr) -> dict | None:
+        """{"op": "xz", ...} for a constant with x or z bits (`'x`, `4'b10zz`), else None."""
+        if self.ctx is None:
+            return None
+        try:
+            cv = expr.eval(self.ctx)
+            if not cv or not cv.hasUnknown():
+                return None
+        except Exception:
+            return None
+        digits = str(cv).split("'")[-1].lower()
+        return {"op": "xz", "args": [], "x": "x" in digits, "z": "z" in digits or "?" in digits,
+                "text": _text(expr) or str(cv)}
+
     def _flat_refs(self, expr) -> list[str]:
         refs: set[str] = set()
 
@@ -172,6 +189,9 @@ class Extractor:
             v = self._eval(expr)
             if v is not None:
                 return {"const": v, "text": _text(expr) or str(v)}
+            xz = self._xz(expr)
+            if xz is not None:
+                return xz
         if depth >= MAX_DEPTH:
             return {"op": "opaque", "refs": refs}
         sub = lambda e: self.tree(e, depth + 1)  # noqa: E731
@@ -255,7 +275,12 @@ class Extractor:
             items = []
             for it in stmt.items:
                 items.append([self.tree(e) for e in it.expressions])
-            base = {"kind": "case", "subject": subject, "text": _text(stmt.expr)}
+            # Every entry carries the whole case (all items, default or not, case/casez/casex,
+            # unique/priority) so N2b can check completeness from any one branch.
+            base = {"kind": "case", "subject": subject, "text": _text(stmt.expr),
+                    "all": [x for xs in items for x in xs], "has_default": stmt.defaultCase is not None,
+                    "condition": _CASE_COND.get(str(stmt.condition).split(".")[-1], "case"),
+                    "check": _CASE_CHECK.get(str(stmt.check).split(".")[-1], "")}
             for i, it in enumerate(stmt.items):
                 self.statement(it.stmt, proc, stack + [{**base, "items": items[i],
                                                          "item_text": ", ".join(_text(e) for e in it.expressions),
