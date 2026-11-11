@@ -139,6 +139,39 @@ def _cmd_n2b(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_n3(args: argparse.Namespace) -> int:
+    from verimine.n3 import run_n3
+
+    try:
+        res = run_n3(args.config, workspace=args.workspace, write=not args.dry_run, auto=args.auto,
+                     explore_gaps=args.explore, formal=not args.no_formal, reuse=not args.fresh)
+    except StageError as e:
+        for i in e.issues:
+            print(f"错误 {i}", file=sys.stderr)
+        return e.exit_code
+    if args.json:
+        print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False, sort_keys=True, default=list))
+        return 0
+    for w in res.warnings:
+        print(f"警告 [{w['code']}] {w['message']}", file=sys.stderr)
+    s, q, sets, leg = res.coverage.summary(), res.quality, res.sets(), res.legality()
+    pct = lambda x: "-" if x is None else f"{x:.0%}"  # noqa: E731
+    print(f"N3 完成：{len(res.cases)} 个测试用例；S_mine {sets['mine']['cases']} 个 / {sets['mine']['cycles']} 拍，"
+          f"S_val {sets['val']['cases']} 个 / {sets['val']['cycles']} 拍" + ("（复用已有轨迹）" if res.db.get("cached") else ""))
+    print(f"  合法性：user {leg['user']}，constrained {leg['constrained']}，unknown {leg['unknown']}")
+    print(f"  覆盖：分支 {pct(s['branch']['ratio'])}，状态 {pct(s['state']['ratio'])}，"
+          f"迁移 {pct(s['state']['transition_ratio'])}，翻转 {pct(s['toggle']['ratio'])}；"
+          f"质量 {'合格' if q['verdict'] == 'ok' else '偏低'}")
+    if res.explore.get("ran"):
+        e = res.explore
+        print(f"  形式探索：目标 {e['targets']}，到达 {e['reached']}，证明不可达 {len(e['unreachable'])}")
+    print(f"  input_hash:  {res.input_hash}")
+    print(f"  traces_hash: {res.traces_hash}")
+    if not args.dry_run:
+        print(f"  报告 runs/{res.n2.n1.n0.hashes['run_hash']}/n3_report.md，轨迹表在 traces/")
+    return 0
+
+
 def _cmd_infer(args: argparse.Namespace) -> int:
     from verimine.n0a import infer
 
@@ -249,6 +282,18 @@ def main(argv: list[str] | None = None) -> int:
     n2b.add_argument("--depth", type=int, help="BMC / 归纳深度，默认 20（run.params.n2b_depth）")
     n2b.add_argument("--timeout", type=int, help="每个 sby 任务的超时秒数，默认 120")
     n2b.set_defaults(func=_cmd_n2b)
+
+    n3 = sub.add_parser("n3", help="轨迹准备：波形 / testbench / 自动激励 → 按用例切分的轨迹、覆盖与缺口")
+    n3.add_argument("config", type=Path, help="status 为 confirmed 的 YAML 配置")
+    n3.add_argument("--workspace", type=Path, help="输出目录，默认 <root>/.verimine")
+    n3.add_argument("--dry-run", action="store_true", help="只跑不写库")
+    n3.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
+    n3.add_argument("--auto", action="store_true", help="已有用户波形或 testbench 时也加自动激励")
+    n3.add_argument("--explore", action=argparse.BooleanOptionalAction, default=None,
+                    help="对覆盖缺口做形式探索（默认：自动激励时开启）")
+    n3.add_argument("--no-formal", action="store_true", help="不调用形式引擎")
+    n3.add_argument("--fresh", action="store_true", help="不复用已有轨迹，重新仿真")
+    n3.set_defaults(func=_cmd_n3)
 
     inf = sub.add_parser("infer", help="N0a 配置补全：从 RTL / .f / 不完整的 YAML 生成 YAML 草稿和推断报告")
     inf.add_argument("root", type=Path, nargs="?", default=Path("."), help="RTL 所在目录（给了 --config 时忽略）")

@@ -10,14 +10,16 @@ SVA-Agnet automates legacy RTL verification for chip firms, IP vendors, and labs
 | N1 | Structural index: slang elaboration, instance tree, assignments with control-condition stacks, module fingerprints, slang/Verilator/Yosys baseline, module status, clock domains | [docs/N1.md](docs/N1.md) |
 | N2 | Behavioral model: variable dependency graph, state machines and transitions, counters / shift registers / memories, interface events, signal roles with confidence, PageRank, COI fingerprints | [docs/N2.md](docs/N2.md) |
 | N2b | Structural checks: templates per problem class (dead code, FSM, arrays/arithmetic, X/drivers, control, timing, counters/FIFOs, registers) → assertions and covers, checked with Yosys + SymbiYosys; failed assertions are candidate RTL defects; standalone report and a bind file of standard SVA | [docs/N2b.md](docs/N2b.md) |
+| N3 | Trace preparation: user waveforms (VCD/FST via wellen) → user testbench → generated stimulus (random under confirmed assumes, formal exploration of gaps, conservative without assumes); sampled per cycle, trimmed, cut into test cases, split into S_mine / S_val; branch / state / transition / toggle coverage and gap list | [docs/N3.md](docs/N3.md) |
 
 ```bash
-python -m venv .venv && .venv/bin/pip install -e '.[dev]'
+python -m venv .venv && .venv/bin/pip install -e '.[dev]'   # dev includes pywellen
 .venv/bin/verimine infer path/to/rtl          # N0a: draft verimine.yaml + n0a_report.json
 .venv/bin/verimine confirm path/to/rtl/verimine.yaml
 .venv/bin/verimine n0 examples/fifo/verimine.yaml
 .venv/bin/verimine n1 examples/fifo/verimine.yaml
 .venv/bin/verimine n2 examples/fifo/verimine.yaml
 .venv/bin/verimine n2b examples/fifo/verimine.yaml   # needs yosys + sby + an SMT solver for the formal part
+.venv/bin/verimine n3 examples/fifo/verimine.yaml    # needs Icarus Verilog (or Verilator)
 .venv/bin/pytest
 ```

@@ -74,6 +74,22 @@ class Registers(_Strict):
     write: str | None = Field(None, pattern=SIGNAL_RE, description="Write-enable signal in scope")
 
 
+class TbRun(_Strict):
+    name: str = Field(pattern=r"^[\w.-]+$")
+    args: list[str] = Field(default_factory=list, description="Plusargs, e.g. +seed=3 +test=smoke")
+
+
+class Testbench(_Strict):
+    files: list[str] = Field(min_length=1, description="Testbench sources, relative to root; compiled after the design")
+    top: str = Field(pattern=IDENT_RE, description="Testbench top module")
+    dut: str | None = Field(None, pattern=SIGNAL_RE, description="Design top inside the testbench, e.g. tb.u_dut; default: found from the waveform")
+    simulator: Literal["auto", "icarus", "verilator"] = "auto"
+    runs: list[TbRun] = Field(default_factory=lambda: [TbRun(name="default")], description="One simulation per run")
+    timeout: int = Field(300, gt=0, description="Seconds per simulation")
+
+    _lists = field_validator("files", mode="before")(_as_list)
+
+
 class LLM(_Strict):
     mode: Literal["off", "cloud", "local"] = "off"
     provider: str | None = None
@@ -103,6 +119,7 @@ class Config(_Strict):
     assumes: list[Assume] = Field(default_factory=list)
     waveforms: list[str] = Field(default_factory=list)
     registers: Registers | None = Field(None, description="Register map for N2b register checks")
+    testbench: Testbench | None = Field(None, description="User testbench, N3's second trace source")
     llm: LLM = Field(default_factory=LLM)
     run: Run = Field(default_factory=Run)
     env: Env = Field(default_factory=Env)

@@ -178,6 +178,12 @@ def load(config_path: Path, env: dict[str, str] | None = None) -> Loaded:
         if rel is not None:
             registers = cfg.registers.model_dump() | {"file": rel}
 
+    testbench = None
+    if cfg.testbench is not None:
+        tb_files = [r for f in cfg.testbench.files
+                    if (r := paths.check(Path(f), f"{where}: testbench.files")) is not None]
+        testbench = cfg.testbench.model_dump() | {"files": tb_files}
+
     lib_dir_files = sorted(
         (Path(dr) / f.name).as_posix()
         for dr in norm_lib_dirs
@@ -213,6 +219,8 @@ def load(config_path: Path, env: dict[str, str] | None = None) -> Loaded:
     }
     if registers is not None:  # only present when configured, so other configs hash as before
         normalized["registers"] = registers
+    if testbench is not None:  # an N3 input; N3 hashes the files itself
+        normalized["testbench"] = testbench
     return Loaded(config_path, root, cfg, normalized, lib_dir_files, log)
 
 
