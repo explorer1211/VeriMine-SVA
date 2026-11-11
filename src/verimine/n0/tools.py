@@ -38,6 +38,10 @@ def collect_tools() -> dict[str, str]:
         "pyslang": f"{metadata.version('pyslang')} (slang {v.getMajor()}.{v.getMinor()}.{v.getPatch()}+{v.getHash()})",
         "pydantic": metadata.version("pydantic"),
     }
+    try:  # optional; N3 falls back to its own VCD reader without it
+        tools["pywellen"] = metadata.version("pywellen")
+    except metadata.PackageNotFoundError:
+        pass
     for name, args in EXTERNAL_TOOLS.items():
         exe = shutil.which(name)
         if exe and (ver := _first_line([exe, *args])):

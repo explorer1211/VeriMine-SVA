@@ -1,0 +1,82 @@
+$timescale 1ns $end
+$scope module bench $end
+$var reg 1 ! clk $end
+$scope module \u_dut  $end
+$var wire 1 ! clk $end
+$var wire 1 " rst_n $end
+$var wire 1 # en $end
+$var wire 4 $ q $end
+$scope module g(0) $end
+$var wire 1 % t $end
+$upscope $end
+$upscope $end
+$upscope $end
+$enddefinitions $end
+#0
+0!
+x"
+x#
+bxxxx $
+x%
+#5
+1!
+#10
+0!
+0"
+0#
+#15
+1!
+b0000 $
+0%
+#20
+0!
+1"
+1#
+#25
+1!
+b0001 $
+1%
+#30
+0!
+#35
+1!
+b0010 $
+#40
+0!
+x#
+#45
+1!
+b0011 $
+#50
+0!
+1#
+#55
+1!
+b0100 $
+#60
+0!
+#65
+1!
+b0101 $
+#70
+0!
+0"
+#75
+1!
+b0000 $
+#80
+0!
+1"
+#85
+1!
+b0001 $
+#90
+0!
+#95
+1!
+b0010 $
+#100
+0!
+#105
+1!
+b0011 $

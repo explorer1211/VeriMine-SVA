@@ -407,6 +407,94 @@
       },
       "title": "Run",
       "type": "object"
+    },
+    "TbRun": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "description": "Plusargs, e.g. +seed=3 +test=smoke",
+          "items": {
+            "type": "string"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "name": {
+          "pattern": "^[\\w.-]+$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "TbRun",
+      "type": "object"
+    },
+    "Testbench": {
+      "additionalProperties": false,
+      "properties": {
+        "dut": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_$]*(\\.[A-Za-z_][A-Za-z0-9_$]*)*(\\[[0-9]+\\])?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Design top inside the testbench, e.g. tb.u_dut; default: found from the waveform",
+          "title": "Dut"
+        },
+        "files": {
+          "description": "Testbench sources, relative to root; compiled after the design",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "runs": {
+          "description": "One simulation per run",
+          "items": {
+            "$ref": "#/$defs/TbRun"
+          },
+          "title": "Runs",
+          "type": "array"
+        },
+        "simulator": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "icarus",
+            "verilator"
+          ],
+          "title": "Simulator",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 300,
+          "description": "Seconds per simulation",
+          "exclusiveMinimum": 0,
+          "title": "Timeout",
+          "type": "integer"
+        },
+        "top": {
+          "description": "Testbench top module",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_$]*$",
+          "title": "Top",
+          "type": "string"
+        }
+      },
+      "required": [
+        "files",
+        "top"
+      ],
+      "title": "Testbench",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -471,6 +559,18 @@
       ],
       "title": "Status",
       "type": "string"
+    },
+    "testbench": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Testbench"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "User testbench, N3's second trace source"
     },
     "unresolved": {
       "items": {

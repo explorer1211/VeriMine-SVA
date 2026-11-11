@@ -17,7 +17,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+# N3 reads waveforms with wellen; without it a built-in VCD reader is used (no FST).
+waves = ["pywellen>=0.25,<0.26"]
+dev = ["pytest>=8", "pywellen>=0.25,<0.26"]
 
 [project.scripts]
 verimine = "verimine.cli:main"
