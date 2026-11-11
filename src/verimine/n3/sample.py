@@ -152,6 +152,21 @@ def cut(times: list[int], sig: dict[str, list], d: Design, min_cycles: int = 2) 
     return segs, stats
 
 
+def reset_inputs(sig: dict[str, list], d: Design, start: int) -> dict:
+    """Top data inputs during the reset period right before row `start` (N3a mines fixed values
+    from it): {"rows": n, "values": {input: [distinct values, None for X]}}."""
+    resets = {r: lv for r, lv in d.resets.items() if r in sig}
+    rows = []
+    i = start - 1
+    while i >= 0 and resets and any(sig[r][i] is None or sig[r][i] == (0 if lv == "low" else 1)
+                                    for r, lv in resets.items()):
+        rows.append(i)
+        i -= 1
+    vals = {x: sorted({sig[x][j] for j in rows}, key=lambda v: (v is None, v or 0))
+            for x in d.inputs if x in sig}
+    return {"rows": len(rows), "values": vals}
+
+
 def make_cases(times, sig, d: Design, *, source: str, kind: str, legality: str, prefix: str,
                min_cycles: int = 2, detail: dict | None = None) -> tuple[list[Case], dict]:
     segs, stats = cut(times, sig, d, min_cycles)
@@ -159,7 +174,7 @@ def make_cases(times, sig, d: Design, *, source: str, kind: str, legality: str, 
     for k, (a, b) in enumerate(segs):
         s = {node: v[a:b] for node, v in sorted(sig.items())}
         c = Case(f"{prefix}#{k}" if len(segs) > 1 else prefix, source, kind, legality, b - a, s,
-                 detail=dict(detail or {}) | {"rows": [a, b]})
+                 detail=dict(detail or {}) | {"rows": [a, b], "reset_inputs": reset_inputs(sig, d, a)})
         c.hash = tagged_hash("n3_case", s)
         cases.append(c)
     return cases, stats

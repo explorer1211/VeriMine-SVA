@@ -172,6 +172,51 @@ def _cmd_n3(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_n3a(args: argparse.Namespace) -> int:
+    from verimine.n3a import apply_decisions, run_n3a
+    from verimine.n3a.cands import RECOMMEND
+
+    split = lambda v: [x for part in (v or []) for x in part.split(",") if x]  # noqa: E731
+    try:
+        res = run_n3a(args.config, workspace=args.workspace, write=not args.dry_run,
+                      formal_checks=not args.no_formal, classify=not args.no_n2b)
+        applied = None
+        if args.accept or args.reject or args.accept_high:
+            if args.dry_run:
+                print("错误 --dry-run 时不写配置", file=sys.stderr)
+                return 2
+            applied = apply_decisions(args.config, res, split(args.accept), split(args.reject),
+                                      args.accept_high, args.reason or "")
+    except StageError as e:
+        for i in e.issues:
+            print(f"错误 {i}", file=sys.stderr)
+        return e.exit_code
+    if args.json:
+        print(json.dumps(res.to_dict() | {"applied": applied}, indent=2, ensure_ascii=False, sort_keys=True))
+        return 0
+    for w in res.warnings:
+        print(f"警告 [{w['code']}] {w['message']}", file=sys.stderr)
+    print("N3a 完成：" + "，".join(f"{k} {v}" for k, v in res.counts().items()))
+    for c in res.cands:
+        rec = f"，{RECOMMEND[c.recommend]}" if c.status == "PROPOSED" and c.recommend else ""
+        where = "" if c in res.top else f" [{c.scope}]"
+        print(f"  {c.id} {c.status:<10} {c.type_name}{where}：{c.text}{rec}"
+              + (f"（{c.reason}）" if c.reason and c.status != "ACCEPTED" else ""))
+    env = [e for e in res.env_missing if e["class"] == "env_missing"]
+    if res.env_missing:
+        print(f"  N2b 失败断言 {len(res.env_missing)} 条，其中 {len(env)} 条归为缺环境假设（env_missing）")
+    if applied:
+        if applied["accepted"]:
+            print(f"  已写入配置 assumes：{', '.join(applied['accepted'])}（build_hash 会变化，下游阶段将重算）")
+        if applied["rejected"]:
+            print(f"  已记录拒绝：{', '.join(applied['rejected'])}")
+        for w in applied["warnings"]:
+            print(f"警告 {w}", file=sys.stderr)
+    if not args.dry_run:
+        print(f"  报告 runs/{res.n3.n2.n1.n0.hashes['run_hash']}/n3a_report.md")
+    return 0
+
+
 def _cmd_infer(args: argparse.Namespace) -> int:
     from verimine.n0a import infer
 
@@ -294,6 +339,19 @@ def main(argv: list[str] | None = None) -> int:
     n3.add_argument("--no-formal", action="store_true", help="不调用形式引擎")
     n3.add_argument("--fresh", action="store_true", help="不复用已有轨迹，重新仿真")
     n3.set_defaults(func=_cmd_n3)
+
+    n3a = sub.add_parser("n3a", help="假设挖掘：候选 assume、过强检查、层级复用；确认后写入配置")
+    n3a.add_argument("config", type=Path, help="status 为 confirmed 的 YAML 配置")
+    n3a.add_argument("--workspace", type=Path, help="输出目录，默认 <root>/.verimine")
+    n3a.add_argument("--dry-run", action="store_true", help="只跑不写库")
+    n3a.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
+    n3a.add_argument("--accept", action="append", metavar="ID[,ID]", help="接受候选，写入配置 assumes")
+    n3a.add_argument("--reject", action="append", metavar="ID[,ID]", help="拒绝候选（记录在库中，下次仍为拒绝）")
+    n3a.add_argument("--accept-high", action="store_true", help="接受全部“建议接受”的高置信候选")
+    n3a.add_argument("--reason", help="拒绝原因")
+    n3a.add_argument("--no-formal", action="store_true", help="不做过强检查和层级复用证明")
+    n3a.add_argument("--no-n2b", action="store_true", help="不跑 N2b、不归类失败断言")
+    n3a.set_defaults(func=_cmd_n3a)
 
     inf = sub.add_parser("infer", help="N0a 配置补全：从 RTL / .f / 不完整的 YAML 生成 YAML 草稿和推断报告")
     inf.add_argument("root", type=Path, nargs="?", default=Path("."), help="RTL 所在目录（给了 --config 时忽略）")

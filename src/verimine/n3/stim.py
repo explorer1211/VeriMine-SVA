@@ -26,9 +26,11 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from verimine.sva_text import desugar, past_calls
+
 RESET_CYCLES = 3
 MAX_TRIES = 64
-_SAMPLED = re.compile(r"\$(past|rose|fell|stable|changed|sampled)\b")
+_SAMPLED = re.compile(r"\$sampled\b")
 _SEQ = re.compile(r"##|\[\*|\[->|\[=|\bs_eventually\b|\beventually\b|\buntil\b|\bthroughout\b|\bwithin\b")
 _DOTTED = re.compile(r"(?<![\w.$'])([A-Za-z_][A-Za-z0-9_$]*(?:\.[A-Za-z_][A-Za-z0-9_$]*)+)")
 
@@ -56,6 +58,7 @@ class Bench:
     resets: list[dict]           # [{"name", "active"}]
     constraints: list[str] = field(default_factory=list)   # Verilog boolean expressions
     prev: list[str] = field(default_factory=list)          # antecedents of |=> assumes
+    hist: list[tuple[str, int]] = field(default_factory=list)  # $past(e, k): (e, k) -> vm_h<i>_<k>
 
     @property
     def data_inputs(self) -> list[Port]:
@@ -63,28 +66,44 @@ class Bench:
         return [p for p in self.ports if p.direction == "in" and p.name not in special]
 
 
-def assume_constraints(assumes: list[dict]) -> tuple[list[str], list[str], list[str]]:
-    """(constraints, |=> antecedents, names that cannot be enforced in a testbench)."""
-    cons, prev, bad = [], [], []
+def assume_constraints(assumes: list[dict]) -> tuple[list[str], list[str], list[str], list[tuple[str, int]]]:
+    """(constraints, |=> antecedents, names that cannot be enforced in a testbench, $past
+    histories). `$past(e, k)` becomes a register chain sampled at the active edge, so at the
+    time inputs are drawn it holds e from k edges ago, as in SVA."""
+    cons, prev, bad, hist = [], [], [], []
 
     def fix(e: str) -> str:
-        return _DOTTED.sub(lambda m: f"dut.{m.group(1)}", e.strip())
+        e = desugar(e.strip())
+        for start, end, arg, k in reversed(past_calls(e)):
+            arg = fix(arg)
+            names = [h[0] for h in hist]
+            if arg in names:
+                i = names.index(arg)
+                hist[i] = (arg, max(hist[i][1], k))
+            else:
+                i = len(hist)
+                hist.append((arg, k))
+            e = e[:start] + f"vm_h{i}_{k}" + e[end:]
+        return _DOTTED.sub(lambda m: f"dut.{m.group(1)}", e)
 
     for a in assumes:
         text = a["expr"].strip()
         if _SEQ.search(text) or _SAMPLED.search(text):
             bad.append(a["name"])
             continue
-        if "|=>" in text:
-            ante, cons_ = text.split("|=>", 1)
-            prev.append(fix(ante))
-            cons.append(f"(!vm_prev_{len(prev) - 1} || ({fix(cons_)}))")
-        elif "|->" in text:
-            ante, cons_ = text.split("|->", 1)
-            cons.append(f"(!({fix(ante)}) || ({fix(cons_)}))")
-        else:
-            cons.append(f"({fix(text)})")
-    return cons, prev, bad
+        try:
+            if "|=>" in text:
+                ante, cons_ = text.split("|=>", 1)
+                prev.append(fix(ante))
+                cons.append(f"(!vm_prev_{len(prev) - 1} || ({fix(cons_)}))")
+            elif "|->" in text:
+                ante, cons_ = text.split("|->", 1)
+                cons.append(f"(!({fix(ante)}) || ({fix(cons_)}))")
+            else:
+                cons.append(f"({fix(text)})")
+        except ValueError:
+            bad.append(a["name"])
+    return cons, prev, bad, hist
 
 
 def unsupported_ports(b: Bench) -> list[str]:
@@ -123,6 +142,11 @@ def bench_text(b: Bench) -> str:
     for i, a in enumerate(b.prev):
         L.append(f"  reg vm_prev_{i} = 1'b0;")
         L.append(f"  always @({main_clk['edge']} {main_clk['name']}) vm_prev_{i} <= vm_rst ? 1'b0 : ({a});")
+    for i, (e, k) in enumerate(b.hist):
+        regs = " ".join(f"vm_h{i}_{j}" for j in range(1, k + 1))
+        L.append(f"  reg [63:0] {', '.join(regs.split())};")
+        shift = " ".join(f"vm_h{i}_{j} <= vm_h{i}_{j - 1};" for j in range(k, 1, -1))
+        L.append(f"  always @({main_clk['edge']} {main_clk['name']}) begin {shift} vm_h{i}_1 <= ({e}); end")
     ok = " && ".join(b.constraints) or "1'b1"
     chunks = (total + 63) // 64
     draw = []

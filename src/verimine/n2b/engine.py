@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from verimine.n1.baseline import _HEADER_IMPORT_RE
+from verimine.sva_text import desugar
 from verimine.n2b.props import Prop
 from verimine.n2b.render import Unrenderable, negated_cover, pv_name, uses_past, verification
 from verimine.n2b.scan import ScanResult
@@ -73,7 +74,7 @@ def find_tools() -> tuple[bool, str]:
 def _assume_lines(assumes: list[dict], clock: dict | None, warn: list[str]) -> list[str]:
     out = []
     for a in assumes:
-        text = a["expr"].strip()
+        text = desugar(a["expr"].strip())
         if re.search(r"##|\[\*|\[->|\[=|\bs_eventually\b|\beventually\b|\buntil\b", text):
             warn.append(f"假设 {a['name']} 含序列运算，验证版暂不支持，未使用")
             continue

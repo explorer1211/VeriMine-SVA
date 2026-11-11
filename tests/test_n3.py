@@ -97,14 +97,17 @@ def test_conservative_stimulus_without_assumes(tmp_path):
 
 
 def test_assumes_enforceable_in_a_testbench():
-    cons, prev, bad = assume_constraints([
+    cons, prev, bad, hist = assume_constraints([
         {"name": "a", "expr": "full |-> !push"},
         {"name": "b", "expr": "req |=> u_arb.busy"},
         {"name": "c", "expr": "valid ##1 ready"},
-        {"name": "d", "expr": "$stable(x)"},
+        {"name": "d", "expr": "valid && !ready |=> $stable(data)"},
+        {"name": "e", "expr": "!x && $past(x) |-> $past(x, 2)"},
     ])
-    assert cons == ["(!(full) || (!push))", "(!vm_prev_0 || (dut.u_arb.busy))"]
-    assert prev == ["req"] and bad == ["c", "d"]
+    assert cons == ["(!(full) || (!push))", "(!vm_prev_0 || (dut.u_arb.busy))",
+                    "(!vm_prev_1 || (((data) == vm_h0_1)))", "(!(!x && vm_h1_1) || (vm_h1_2))"]
+    assert prev == ["req", "valid && !ready"] and bad == ["c"]
+    assert hist == [("data", 1), ("x", 2)]
 
 
 @needs_sim

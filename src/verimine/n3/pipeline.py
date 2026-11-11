@@ -25,7 +25,7 @@ from verimine.n3.store import write_run, load_run
 from verimine.n3.wave import open_wave, reader_name
 
 # Bump when sampling, trimming, splitting or stimulus generation changes: part of the input hash.
-N3_VERSION = 1
+N3_VERSION = 2
 
 DEFAULTS = {
     "n3_random_runs": 8, "n3_random_cycles": 200,
@@ -201,7 +201,7 @@ def run_n3(
     waves = [root / w for w in norm.get("waveforms", [])]
     tb = norm.get("testbench")
     assumes = norm.get("assumes", [])
-    cons, prev, bad = stim.assume_constraints(assumes)
+    cons, prev, bad, hist = stim.assume_constraints(assumes)
     have_assumes = bool(assumes) and not bad
 
     ih = tagged_hash("n3_input", {
@@ -270,7 +270,7 @@ def run_n3(
             elif not assumes:
                 log.warn("N3_NO_ASSUMES", "没有已确认的假设：只生成保守激励（复位序列、单点翻转），"
                                            "trace_legality = unknown；由此挖出的候选默认降权并进入 REVIEW_REQUIRED")
-            b.constraints, b.prev = (cons, prev) if have_assumes else ([], [])
+            b.constraints, b.prev, b.hist = (cons, prev, hist) if have_assumes else ([], [], [])
             (work / "gen").mkdir(parents=True, exist_ok=True)
             tbv = work / "gen" / "vm_n3_tb.sv"
             tbv.write_text(stim.bench_text(b), encoding="utf-8")

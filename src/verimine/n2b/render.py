@@ -75,7 +75,8 @@ def sv(t: dict, name: Callable[[str], str] = lambda n: n, yosys: bool = False) -
     if o == "opaque" or o is None:
         raise Unrenderable("表达式含无法还原的部分（函数调用、复杂选择等）")
     if o == "$past":
-        return f"$past({r(args[0])})"
+        k = t.get("k", 1)
+        return f"$past({r(args[0])})" if k == 1 else f"$past({r(args[0])}, {k})"
     if o in _UNARY:
         return f"{_UNARY[o]}({r(args[0])})"
     if o == "u+":
