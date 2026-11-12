@@ -25,7 +25,7 @@ from verimine.n3.store import write_run, load_run
 from verimine.n3.wave import open_wave, reader_name
 
 # Bump when sampling, trimming, splitting or stimulus generation changes: part of the input hash.
-N3_VERSION = 2
+N3_VERSION = 3
 
 DEFAULTS = {
     "n3_random_runs": 8, "n3_random_cycles": 200,

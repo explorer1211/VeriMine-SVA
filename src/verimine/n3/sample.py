@@ -51,15 +51,18 @@ class Case:
 
 def find_scope(w: Wave, d: Design) -> tuple[str | None, int]:
     """The waveform scope that holds the design top: the one whose variables cover the most top
-    ports and child instances."""
+    ports, child instances and internal signals of the top (a testbench usually names its wires
+    after the ports, so ports alone do not tell the testbench from the design)."""
     scopes: dict[str, set[str]] = {}
     for n in w.vars:
         parts = n.split(".")
         for i in range(1, len(parts)):
             scopes.setdefault(".".join(parts[:i]), set()).add(parts[i])
+    internal = {name for inst, name, _w in d.nodes.values() if inst == d.top} - set(d.top_ports)
     best, score = None, 0
     for s, kids in sorted(scopes.items(), key=lambda kv: (kv[0].count("."), kv[0])):
-        sc = sum(1 for p in d.top_ports if p in kids) + sum(1 for c in d.children if c in kids)
+        sc = sum(1 for p in d.top_ports if p in kids) + sum(1 for c in d.children if c in kids) \
+            + sum(1 for n in internal if n in kids)
         if sc > score:
             best, score = s, sc
     return best, score
