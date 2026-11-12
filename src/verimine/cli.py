@@ -217,6 +217,48 @@ def _cmd_n3a(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_n4(args: argparse.Namespace) -> int:
+    from verimine.n4 import run_n4
+    from verimine.n4.ir import SOURCES
+    from verimine.n4.store import export_audit
+
+    if args.audit_export:
+        from verimine.n0.load import load
+        loaded = load(args.config)
+        ws = args.workspace or (loaded.root / ".verimine")
+        args.audit_export.write_text(json.dumps(export_audit(ws / "verimine.db"), indent=2, ensure_ascii=False)
+                                     + "\n", encoding="utf-8")
+        print(f"LLM 审计日志已导出到 {args.audit_export}")
+        return 0
+    try:
+        res = run_n4(args.config, workspace=args.workspace, write=not args.dry_run)
+    except StageError as e:
+        for i in e.issues:
+            print(f"错误 {i}", file=sys.stderr)
+        return e.exit_code
+    if args.json:
+        print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False, sort_keys=True))
+        return 0
+    for w in res.warnings:
+        print(f"警告 [{w['code']}] {w['message']}", file=sys.stderr)
+    print("N4 完成：" + "，".join(f"{k} {v}" for k, v in res.counts().items())
+          + "；入池来源 " + "，".join(f"{k} {v}" for k, v in res.by_source().items()))
+    for k in SOURCES:
+        p = res.paths[k]
+        print(f"  路径 {k}（{SOURCES[k]}）：" + (f"{p['raw']} 条原始候选" if p.get("ran") else f"未运行，{p['reason']}"))
+    for c in res.pool:
+        tags = [("+".join(c.sources)), c.legality] + ([f"依赖 {','.join(c.assumes)}"] if c.assumes else []) \
+            + (["缺口"] if c.gap else []) + (["REVIEW_REQUIRED"] if c.review_required else [])
+        where = "" if c.scope == res.n3.n2.n1.elaboration.top_path else f" [{c.scope}]"
+        print(f"  {c.id} {c.type}{where}：{c.text}（{'，'.join(tags)}）")
+    dropped = [c for c in res.cands if c.status == "DROPPED"]
+    if dropped:
+        print(f"  已淘汰 {len(dropped)} 条（S_mine 上被违反），暂缓 {res.counts().get('DEFERRED', 0)} 条")
+    if not args.dry_run:
+        print(f"  报告 runs/{res.n3.n2.n1.n0.hashes['run_hash']}/n4_report.md")
+    return 0
+
+
 def _cmd_infer(args: argparse.Namespace) -> int:
     from verimine.n0a import infer
 
@@ -352,6 +394,14 @@ def main(argv: list[str] | None = None) -> int:
     n3a.add_argument("--no-formal", action="store_true", help="不做过强检查和层级复用证明")
     n3a.add_argument("--no-n2b", action="store_true", help="不跑 N2b、不归类失败断言")
     n3a.set_defaults(func=_cmd_n3a)
+
+    n4 = sub.add_parser("n4", help="候选挖掘：模板（A）、决策树（B，实验）、LLM（C，可选）合并成候选池")
+    n4.add_argument("config", type=Path, help="status 为 confirmed 的 YAML 配置")
+    n4.add_argument("--workspace", type=Path, help="输出目录，默认 <root>/.verimine")
+    n4.add_argument("--dry-run", action="store_true", help="只跑不写库")
+    n4.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
+    n4.add_argument("--audit-export", type=Path, metavar="FILE", help="导出 LLM 调用审计日志（JSON）后退出")
+    n4.set_defaults(func=_cmd_n4)
 
     inf = sub.add_parser("infer", help="N0a 配置补全：从 RTL / .f / 不完整的 YAML 生成 YAML 草稿和推断报告")
     inf.add_argument("root", type=Path, nargs="?", default=Path("."), help="RTL 所在目录（给了 --config 时忽略）")
