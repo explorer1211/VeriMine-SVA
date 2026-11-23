@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VeriMine-SVA · 界面演示</title>
+<style>
+:root {
+  --navy: #1f2a44; --navy-2: #2b3a5c; --navy-3: #3a4c74; --gold: #c9a227; --gold-soft: #f4ecd2;
+  --surface: #fcfcfb; --surface-2: #f4f4f1; --line: #e3e2dd; --line-2: #d2d1cb;
+  --text: #0b0b0b; --text-2: #52514e; --text-3: #85847e;
+  --good: #0ca30c; --good-text: #006300; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s1-track: #cde2fb;
+  --mono: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif;
+       color: var(--text); background: var(--surface-2); display: grid; grid-template-columns: 216px 1fr;
+       grid-template-rows: 56px 1fr; grid-template-areas: "side top" "side main"; }
+code, pre, .mono { font-family: var(--mono); font-size: 12.5px; }
+button { font: inherit; cursor: pointer; }
+
+/* chrome */
+aside { grid-area: side; background: var(--navy); color: #dfe4ee; display: flex; flex-direction: column; }
+.brand { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid var(--navy-3); }
+.brand .logo { width: 28px; height: 28px; border-radius: 6px; background: var(--gold); color: var(--navy);
+               display: grid; place-items: center; font-weight: 700; }
+.brand b { color: #fff; letter-spacing: .3px; }
+.brand small { display: block; color: #9aa5bd; font-size: 11px; margin-top: -2px; }
+nav { padding: 10px 8px; flex: 1; }
+nav .group { color: #8792ab; font-size: 11px; padding: 12px 10px 4px; letter-spacing: .5px; }
+nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; color: #dfe4ee;
+        text-decoration: none; }
+nav a:hover { background: var(--navy-2); }
+nav a.on { background: var(--navy-3); color: #fff; box-shadow: inset 3px 0 0 var(--gold); }
+nav a .n { margin-left: auto; font-size: 11px; background: var(--navy-2); color: #c8cfdd; padding: 0 7px; border-radius: 9px; }
+nav a.on .n { background: var(--gold); color: var(--navy); }
+.side-foot { padding: 12px 18px; font-size: 11px; color: #8792ab; border-top: 1px solid var(--navy-3); }
+
+header { grid-area: top; background: #fff; border-bottom: 1px solid var(--line); display: flex; align-items: center;
+         gap: 14px; padding: 0 22px; }
+.proj { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.proj select { font: inherit; border: 1px solid var(--line-2); border-radius: 6px; padding: 4px 8px; background: #fff; }
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 9px; border-radius: 11px;
+        background: var(--surface-2); color: var(--text-2); border: 1px solid var(--line); white-space: nowrap; }
+.chip.gold { background: var(--gold-soft); border-color: #e6d7a3; color: #6b5510; }
+.spacer { flex: 1; }
+.btn { border: 1px solid var(--line-2); background: #fff; border-radius: 6px; padding: 6px 12px; color: var(--text); white-space: nowrap; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--navy); border-color: var(--navy); color: #fff; }
+.btn.primary:hover { background: var(--navy-2); }
+.btn.gold { background: var(--gold); border-color: var(--gold); color: var(--navy); font-weight: 600; }
+.btn.sm { padding: 3px 9px; font-size: 12px; }
+.btn:disabled { opacity: .5; cursor: default; }
+
+main { grid-area: main; overflow: auto; padding: 22px 26px 40px; }
+.page { display: none; max-width: 1280px; }
+.page.on { display: block; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+.sub { color: var(--text-2); margin: 0 0 18px; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+.card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+.grid { display: grid; gap: 16px; }
+.g4 { grid-template-columns: repeat(4, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); }
+.g2 { grid-template-columns: 1fr 1fr; } .g21 { grid-template-columns: 2fr 1fr; }
+.grid > *, .split > * { min-width: 0; }
+.muted { color: var(--text-3); } .small { font-size: 12px; }
+.demo-tag { font-size: 11px; color: #6b5510; background: var(--gold-soft); border: 1px dashed #d9c47e; padding: 1px 8px; border-radius: 4px; }
+
+/* stat tiles */
+.tile .label { color: var(--text-2); font-size: 13px; }
+.tile .value { font-size: 28px; font-weight: 600; margin: 2px 0; }
+.tile .delta { font-size: 12px; color: var(--text-2); }
+.hero { font-size: 48px; font-weight: 600; line-height: 1.1; }
+
+/* status badges: icon + label, never color alone */
+.st { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.st i { width: 14px; height: 14px; border-radius: 50%; display: inline-grid; place-items: center; font-style: normal;
+        font-size: 9px; color: #fff; font-weight: 700; }
+.st.good i { background: var(--good); } .st.good { color: var(--good-text); }
+.st.warn i { background: var(--warning); color: #3d2c00; } .st.warn { color: #7a5400; }
+.st.serious i { background: var(--serious); } .st.serious { color: #9a3f19; }
+.st.crit i { background: var(--critical); } .st.crit { color: #a62323; }
+.st.neutral i { background: #a9a8a2; } .st.neutral { color: var(--text-2); }
+.st.run i { background: var(--s1); animation: pulse 1s infinite; } .st.run { color: #1c5cab; }
+@keyframes pulse { 50% { opacity: .35; } }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 500; color: var(--text-2); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr.click { cursor: pointer; } tr.click:hover td { background: #f8f8f5; }
+tr.sel td { background: #eef4fc !important; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line-2); color: var(--text-2); margin-right: 3px; }
+.tag.src-A { border-color: #b7d3f6; color: #1c5cab; } .tag.src-B { border-color: #f3c3ae; color: #9a3f19; } .tag.src-C { border-color: #b4e3d1; color: #0f6e4c; }
+
+/* pipeline */
+.pipe { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
+.stage { border: 1px solid var(--line); border-radius: 8px; padding: 8px 8px 7px; background: #fff; cursor: pointer; min-height: 78px; }
+.stage:hover { border-color: var(--line-2); }
+.stage.on { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy); }
+.stage .k { font-weight: 700; font-size: 13px; } .stage .t { font-size: 12px; color: var(--text-2); margin: 1px 0 5px; }
+.stage.todo { background: var(--surface); } .stage.todo .k, .stage.todo .t { color: var(--text-3); }
+.ver { font-size: 10px; color: var(--text-3); }
+
+/* meters */
+.meter { margin: 10px 0 14px; }
+.meter .row { display: flex; justify-content: space-between; font-size: 13px; }
+.meter .bar { height: 8px; border-radius: 4px; background: var(--s1-track); margin-top: 5px; overflow: hidden; position: relative; }
+.meter .bar span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--s1); }
+.meter .bar.prev span { background: transparent; border-right: 2px solid var(--navy); border-radius: 0; }
+
+/* segmented bar */
+.seg { display: flex; gap: 2px; height: 14px; margin: 8px 0 10px; }
+.seg div { border-radius: 3px; position: relative; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--text-2); }
+.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; background: var(--c); vertical-align: -1px; }
+
+/* review split */
+.split { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.filters select, .filters input { font: inherit; font-size: 13px; border: 1px solid var(--line-2); border-radius: 6px; padding: 4px 8px; background: #fff; }
+.seg-ctl { display: inline-flex; border: 1px solid var(--line-2); border-radius: 6px; overflow: hidden; }
+.seg-ctl button { border: 0; background: #fff; padding: 4px 10px; font-size: 13px; border-right: 1px solid var(--line); white-space: nowrap; }
+.seg-ctl button:last-child { border-right: 0; }
+.seg-ctl button.on { background: var(--navy); color: #fff; }
+.detail { position: sticky; top: 0; }
+pre.code { background: #0f1729; color: #e6e9f0; padding: 12px 14px; border-radius: 8px; overflow: auto; margin: 6px 0 12px; line-height: 1.55; }
+pre.code .kw { color: #f0c862; } pre.code .cm { color: #7f8aa3; }
+.kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 10px; font-size: 13px; margin: 8px 0 12px; }
+.kv div:nth-child(odd) { color: var(--text-2); }
+.chain { list-style: none; padding: 0; margin: 6px 0 12px; }
+.chain li { display: grid; grid-template-columns: 20px 92px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.chain li:last-child { border-bottom: 0; }
+.explain { background: var(--gold-soft); border: 1px solid #e6d7a3; border-radius: 8px; padding: 10px 12px; margin: 4px 0 12px; }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 6px 0 10px; }
+.tabs button { border: 0; background: none; padding: 6px 12px; color: var(--text-2); border-bottom: 2px solid transparent; }
+.tabs button.on { color: var(--text); border-bottom-color: var(--gold); font-weight: 600; }
+
+/* waveform */
+.wave { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.wave text { font-family: var(--mono); font-size: 11px; fill: var(--text-2); }
+
+/* toast / tooltip / modal */
+#toast { position: fixed; right: 22px; bottom: 22px; background: var(--navy); color: #fff; padding: 10px 14px; border-radius: 8px;
+         box-shadow: 0 6px 20px rgba(0,0,0,.18); opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none; }
+#toast.on { opacity: 1; transform: none; }
+#tip { position: fixed; pointer-events: none; background: #fff; border: 1px solid var(--line-2); border-radius: 6px; padding: 6px 9px;
+       font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); display: none; z-index: 20; }
+.modal-bg { position: fixed; inset: 0; background: rgba(15,23,41,.35); display: none; place-items: center; z-index: 30; }
+.modal-bg.on { display: grid; }
+.modal { background: #fff; border-radius: 10px; width: 420px; padding: 18px 20px; }
+.modal label { display: block; margin: 6px 0; }
+.log { background: #0f1729; color: #c9d1e3; border-radius: 8px; padding: 10px 12px; height: 210px; overflow: auto; font-family: var(--mono); font-size: 12px; }
+.log .ok { color: #7fd17f; } .log .w { color: #f0c862; } .log .e { color: #ff8a8a; }
+.empty { color: var(--text-3); padding: 30px; text-align: center; }
+.file { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.file .ic { width: 34px; height: 34px; border-radius: 6px; background: var(--surface-2); display: grid; place-items: center; font-size: 11px; color: var(--text-2); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="brand"><div class="logo">V</div><div><b>VeriMine-SVA</b><small>遗留 RTL → 可证明的断言</small></div></div>
+  <nav id="nav">
+    <div class="group">项目</div>
+    <a href="#overview" data-p="overview">概览</a>
+    <a href="#pipeline" data-p="pipeline">流水线</a>
+    <div class="group">检查与挖掘</div>
+    <a href="#lint" data-p="lint">结构性检查 <span class="n">N2b</span></a>
+    <a href="#assume" data-p="assume">环境假设 <span class="n">N3a</span></a>
+    <a href="#review" data-p="review">断言审阅 <span class="n" id="nav-review">0</span></a>
+    <div class="group">结果</div>
+    <a href="#coverage" data-p="coverage">覆盖 <span class="n">N7</span></a>
+    <a href="#delivery" data-p="delivery">交付与 CI <span class="n">N10</span></a>
+    <a href="#settings" data-p="settings">配置</a>
+  </nav>
+  <div class="side-foot">界面演示 · 数据为示例<br>v0.1 · LLM 关闭</div>
+</aside>
+
+<header>
+  <div class="proj">项目
+    <select id="proj"><option>fifo_top（示例 FIFO）</option><option>src（握手样例）</option><option>picorv32（未运行）</option></select>
+  </div>
+  <span class="chip mono" title="run_hash">run 04ea1c90…</span>
+  <span class="chip">分支 main · 提交 4e00529</span>
+  <span class="chip gold">LLM：关闭</span>
+  <span class="spacer"></span>
+  <span class="demo-tag">演示数据，按钮不连接后端</span>
+  <button class="btn primary" id="run-btn">▶ 运行流水线</button>
+</header>
+
+<main>
+
+<!-- ============================== 概览 ============================== -->
+<section class="page" id="p-overview">
+  <h1>fifo_top</h1>
+  <p class="sub">顶层 <code>fifo_top</code> · 3 个模块、2 个实例 · 时钟 <code>clk</code>（上升沿） · 复位 <code>rst_n</code>（低有效，异步） · 最近运行 2026-11-23 16:42，耗时 3 分 12 秒</p>
+  <div class="grid g4">
+    <div class="card tile"><div class="label">已证明断言</div><div class="value" id="t-proven">–</div><div class="delta">交付集合，端口级优先</div></div>
+    <div class="card tile"><div class="label">待审阅</div><div class="value" id="t-pending">–</div><div class="delta">含 REVIEW_REQUIRED</div></div>
+    <div class="card tile"><div class="label">疑似 RTL 缺陷</div><div class="value">1</div><div class="delta"><span class="st crit"><i>!</i>需人工判断</span></div></div>
+    <div class="card tile"><div class="label">环境假设</div><div class="value">2 / 4</div><div class="delta">已接受 / 候选，1 条 OPEN</div></div>
+  </div>
+  <div class="grid g21">
+    <div class="card">
+      <h2>流水线状态</h2>
+      <div class="pipe" id="pipe-mini"></div>
+      <p class="small muted" style="margin:10px 0 0">点击阶段查看详情。N6–N10 尚未实现，演示中以示例结果占位。</p>
+    </div>
+    <div class="card">
+      <h2>COI 覆盖</h2>
+      <div class="hero">78%</div>
+      <div class="muted small">被已证明断言影响锥触及的逻辑比例（上一轮 61%）</div>
+      <div class="meter"><div class="bar"><span style="width:78%"></span></div></div>
+      <div class="small muted">诚实标注：COI 覆盖只表示"被断言触及"，不等于验证充分。</div>
+    </div>
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <h2>断言状态分布 <span class="small muted" style="font-weight:400">（审阅列表中的 12 条）</span></h2>
+      <div class="seg" id="dist"></div>
+      <div class="legend" id="dist-legend"></div>
+    </div>
+    <div class="card">
+      <h2>需要先处理的事项</h2>
+      <table>
+        <tr><td><span class="st crit"><i>!</i>疑似缺陷</span></td><td>FIFO 上溢：满时写入仍改变了占用计数 <code>count</code></td><td><a href="#lint">查看</a></td></tr>
+        <tr><td><span class="st warn"><i>!</i>OPEN</span></td><td><code>u_ctrl</code> 的假设 <code>empty |-> !pop</code> 没有被上层保证</td><td><a href="#assume">查看</a></td></tr>
+        <tr><td><span class="st serious"><i>?</i>待审阅</span></td><td>1 条来自合法性未知轨迹的候选（REVIEW_REQUIRED）</td><td><a href="#review">查看</a></td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 流水线 ============================== -->
+<section class="page" id="p-pipeline">
+  <h1>流水线</h1>
+  <p class="sub">每个阶段的输入都有哈希，输入不变的阶段直接复用上次结果。</p>
+  <div class="card"><div class="pipe" id="pipe-full"></div></div>
+  <div class="grid g2">
+    <div class="card" id="stage-detail"></div>
+    <div class="card"><h2>运行日志</h2><div class="log" id="log"></div></div>
+  </div>
+</section>
+
+<!-- ============================== N2b ============================== -->
+<section class="page" id="p-lint">
+  <h1>结构性检查</h1>
+  <p class="sub">不需要轨迹、不需要 LLM：按结构证据套模板生成断言和 cover，交形式引擎判定。失败的断言是候选 RTL 缺陷，排在最前面。</p>
+  <div class="grid g4" id="lint-classes"></div>
+  <div class="split">
+    <div class="card" style="padding:0">
+      <table id="lint-table"></table>
+    </div>
+    <div class="card detail" id="lint-detail"></div>
+  </div>
+</section>
+
+<!-- ============================== N3a ============================== -->
+<section class="page" id="p-assume">
+  <h1>环境假设</h1>
+  <p class="sub">输入约束候选。高置信项建议接受，其余需要确认；接受的假设写入配置 <code>assumes</code>，参与 build_hash。过强检查用 N2b 的 cover 确认关键状态仍可达。</p>
+  <div class="card" style="padding:0"><table id="assume-table"></table></div>
+  <div class="card">
+    <h2>OPEN：未被上层保证的子模块假设</h2>
+    <table>
+      <tr><th>实例</th><th>假设</th><th>原因</th></tr>
+      <tr><td class="mono">fifo_top.u_ctrl</td><td><code>empty |-> !pop</code></td><td>上层没有约束它：第 3 拍出现反例</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h2>N2b 失败断言的归类</h2>
+    <table>
+      <tr><th>断言</th><th>反例违反的候选</th><th>归类</th></tr>
+      <tr><td class="mono">N2B_0014 counter.overflow</td><td>N3A_0002 协议保持</td><td><span class="st warn"><i>!</i>缺环境假设 env_missing</span></td></tr>
+      <tr><td class="mono">N2B_0021 fifo.overflow</td><td>—</td><td><span class="st crit"><i>!</i>其他（交给 N8）</span></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============================== 审阅 ============================== -->
+<section class="page" id="p-review">
+  <h1>断言审阅</h1>
+  <p class="sub">每条断言带证据链：来源、轨迹、证明、cover 见证、三方差分。拒绝时选择原因，写入反馈数据。</p>
+  <div class="filters">
+    <span class="seg-ctl" id="f-state">
+      <button data-v="all" class="on">全部</button><button data-v="NEW">待审阅</button><button data-v="ACCEPTED">已接受</button><button data-v="REJECTED">已拒绝</button>
+    </span>
+    <select id="f-src"><option value="">全部来源</option><option value="A">A 规则模板</option><option value="B">B 决策树（实验）</option><option value="C">C LLM</option></select>
+    <select id="f-status"><option value="">全部验证状态</option><option>PROVEN</option><option>BOUNDED</option><option>FAILED</option><option>VACUOUS</option><option>REVIEW_REQUIRED</option></select>
+    <select id="f-level"><option value="">全部层级</option><option value="port">端口级</option><option value="internal">内部级</option></select>
+    <input id="f-q" placeholder="搜索信号或名字" style="width:150px">
+    <span class="spacer"></span>
+    <button class="btn" id="batch">批量接受：A 来源且 PROVEN</button>
+  </div>
+  <div class="split">
+    <div class="card" style="padding:0;max-height:calc(100vh - 230px);overflow:auto"><table id="rv-table"></table></div>
+    <div class="card detail" id="rv-detail"></div>
+  </div>
+</section>
+
+<!-- ============================== 覆盖 ============================== -->
+<section class="page" id="p-coverage">
+  <h1>覆盖</h1>
+  <p class="sub">四项指标；覆盖驱动闭环：缺口 → N4 定向生成 → N5 → N6 → N7，最多 R 轮。</p>
+  <div class="grid g2">
+    <div class="card">
+      <h2>本轮与上一轮</h2>
+      <div id="meters"></div>
+      <div class="legend"><span style="--c:var(--s1)">本轮（第 2 轮）</span><span style="--c:var(--navy)">上一轮标记</span></div>
+    </div>
+    <div class="card">
+      <h2>闭环轮次</h2>
+      <svg id="rounds" viewBox="0 0 420 200" style="width:100%;height:auto"></svg>
+      <p class="small muted">停止条件：覆盖达阈值 85%、连续两轮提升低于 1%，或预算用尽。</p>
+    </div>
+  </div>
+  <div class="card">
+    <h2>覆盖缺口：未被任何 PROVEN 断言触及的逻辑</h2>
+    <table>
+      <tr><th>实例</th><th>逻辑块</th><th>类型</th><th class="num">COI 节点</th><th>下一轮</th></tr>
+      <tr><td class="mono">fifo_top.u_mem</td><td><code>mem[waddr] &lt;= wdata</code></td><td>存储器写</td><td class="num">34</td><td>N4 配额 ×3</td></tr>
+      <tr><td class="mono">fifo_top</td><td><code>rdata</code></td><td>输出端口</td><td class="num">41</td><td>N4 配额 ×3</td></tr>
+      <tr><td class="mono">fifo_top.u_ctrl</td><td><code>if (pop &amp;&amp; !empty) raddr &lt;= raddr + 1</code></td><td>分支</td><td class="num">9</td><td>已在本轮补上</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============================== 交付 ============================== -->
+<section class="page" id="p-delivery">
+  <h1>交付与 CI</h1>
+  <p class="sub">交付包是标准 SVA 文件、bind 文件和报告，可以直接放进任何仿真或形式工具。</p>
+  <div class="grid g2">
+    <div class="card">
+      <h2>交付包</h2>
+      <div class="file"><div class="ic">SV</div><div><b>n5_sva.sv</b><div class="small muted">检查器模块，标准 SVA · 13 条断言与 cover</div></div><span class="spacer"></span><button class="btn sm dl">下载</button></div>
+      <div class="file"><div class="ic">SV</div><div><b>n5_bind.sv</b><div class="small muted">bind 到实例路径 · 2 个实例</div></div><span class="spacer"></span><button class="btn sm dl">下载</button></div>
+      <div class="file"><div class="ic">MD</div><div><b>report.md / report.html</b><div class="small muted">状态、证据、来源、未处理项（BLOCKED、UNRESOLVED、疑似缺陷）</div></div><span class="spacer"></span><button class="btn sm dl">下载</button></div>
+      <div class="file"><div class="ic">XML</div><div><b>junit.xml</b><div class="small muted">通用测试报告格式，CI 直接读</div></div><span class="spacer"></span><button class="btn sm dl">下载</button></div>
+      <p style="margin:14px 0 0"><button class="btn gold" id="pack">生成交付包</button></p>
+    </div>
+    <div class="card">
+      <h2>接入 CI</h2>
+      <div class="tabs" id="ci-tabs"><button class="on" data-t="gh">GitHub Actions</button><button data-t="gl">GitLab CI</button><button data-t="jk">Jenkins</button></div>
+      <pre class="code" id="ci-code"></pre>
+      <div class="kv"><div>变更破坏断言</div><div><span class="seg-ctl"><button class="on">仅警告</button><button>阻断合并</button></span></div>
+      <div>增量运行</div><div>只重新验证 COI 指纹变化的断言</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>最近一次变更的影响</h2>
+    <table>
+      <tr><th>提交</th><th>变化的模块</th><th>受影响断言</th><th>结果</th></tr>
+      <tr><td class="mono">4e00529</td><td>无（网表哈希不变）</td><td class="num">0</td><td><span class="st good"><i>✓</i>跳过</span></td></tr>
+      <tr><td class="mono">ae79542</td><td class="mono">fifo_ctrl</td><td class="num">7</td><td><span class="st good"><i>✓</i>STILL_VALID 6</span> &nbsp;<span class="st crit"><i>!</i>BROKEN_BY_CHANGE 1</span></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============================== 配置 ============================== -->
+<section class="page" id="p-settings">
+  <h1>配置</h1>
+  <p class="sub">唯一必需的输入是 YAML 配置；没有时由 N0a 从 RTL 推断出草稿，确认后 <code>status</code> 改为 confirmed。</p>
+  <div class="grid" style="grid-template-columns: 1.2fr 1fr">
+    <div class="card"><h2>verimine.yaml</h2><pre class="code" id="yaml"></pre></div>
+    <div class="card">
+      <h2>LLM 合规模式</h2>
+      <div class="kv">
+        <div>模式</div><div><span class="seg-ctl" id="llm-mode"><button class="on">关闭</button><button>国内云端</button><button>私有部署</button><button>境外云端</button></span></div>
+        <div>数据级别</div><div>L1 脱敏摘要 + L2 结构摘要；L0（源文件、真实信号名）不出域</div>
+        <div>审计日志</div><div>每次调用的输入哈希、回答、是否采纳 · <a href="#" onclick="toast('演示：导出 n4_llm_audit.json');return false">导出</a></div>
+      </div>
+      <h2 style="margin-top:18px">FTO 敏感功能</h2>
+      <div class="kv">
+        <div>路径 B</div><div><label><input type="checkbox"> 决策树挖掘（实验功能，FTO 结论前不对外发布）</label></div>
+        <div>重要性排序</div><div><label><input type="checkbox"> PageRank 作并列时的辅助排序</label></div>
+      </div>
+      <h2 style="margin-top:18px">引擎</h2>
+      <table>
+        <tr><th>引擎</th><th>用途</th><th>状态</th></tr>
+        <tr><td>Yosys + SymbiYosys 0.70</td><td>形式验证</td><td><span class="st good"><i>✓</i>可用</span></td></tr>
+        <tr><td>Verilator 5.052</td><td>仿真、差分测试</td><td><span class="st good"><i>✓</i>可用</span></td></tr>
+        <tr><td>JasperGold / VC Formal</td><td>交付版</td><td><span class="st neutral"><i>–</i>未配置</span></td></tr>
+        <tr><td>GalaxFV / HimaFormal MC</td><td>国产引擎</td><td><span class="st neutral"><i>?</i>接口待确认</span></td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<div id="toast"></div>
+<div id="tip"></div>
+<div class="modal-bg" id="modal"><div class="modal">
+  <h2>拒绝原因</h2>
+  <label><input type="radio" name="why" value="意图不符" checked> 与设计意图不符</label>
+  <label><input type="radio" name="why" value="过于实现相关"> 过于依赖实现细节（重构会失效）</label>
+  <label><input type="radio" name="why" value="重复"> 与已有断言重复</label>
+  <label><input type="radio" name="why" value="价值低"> 价值低（恒真、太弱）</label>
+  <label><input type="radio" name="why" value="其他"> 其他</label>
+  <p class="actions" style="margin:14px 0 0;justify-content:flex-end"><button class="btn" id="m-cancel">取消</button><button class="btn primary" id="m-ok">确认拒绝</button></p>
+</div></div>
+
+<script>
+// ------------------------------------------------------------------ data (示例)
+const STAGES = [
+  {k:"N0", t:"工程预处理", s:"done", d:"1.2s", note:"四层哈希；快照 7 个源文件（含 include）", hash:"build 9f3c2a…"},
+  {k:"N1", t:"结构索引", s:"done", d:"2.8s", note:"slang 展开 2 个实例；Verilator、Yosys 基线通过；无 BLOCKED", hash:"index 51be07…"},
+  {k:"N2", t:"行为建模", s:"done", d:"0.4s", note:"VDG 58 节点；识别计数器 3、接口事件 4；COI 指纹 12", hash:"n2 a7d1e9…"},
+  {k:"N2b", t:"结构性检查", s:"warn", d:"38s", note:"23 条断言 / 31 个 cover；1 条失败（候选缺陷）", hash:"n2b 0c94f2…"},
+  {k:"N3", t:"轨迹准备", s:"done", d:"21s", note:"受约束随机 8 次、形式探索 3 条；状态覆盖 100%，分支 92%", hash:"traces 3e18aa…"},
+  {k:"N3a", t:"假设挖掘", s:"warn", d:"44s", note:"4 条候选；1 条 OPEN；env_missing 2 → 0", hash:"n3a 6b0f51…"},
+  {k:"N4", t:"候选挖掘", s:"done", d:"0.9s", note:"路径 A 10 条，去重后 8 条；路径 B、C 关闭", hash:"n4 e21c7d…"},
+  {k:"N5", t:"SVA 生成", s:"done", d:"13s", note:"交付版 13、验证版 13；三方差分 13/13 一致", hash:"n5 d40b8e…"},
+  {k:"N6", t:"编译检查", s:"todo", d:"—", note:"slang 编译交付版、Yosys 读入验证版（尚未实现，示例占位）", hash:""},
+  {k:"N7", t:"验证与覆盖", s:"todo", d:"—", note:"分层证明、覆盖、闭环（尚未实现，示例占位）", hash:""},
+  {k:"N8", t:"反例分析", s:"todo", d:"—", note:"八类根因（尚未实现，示例占位）", hash:""},
+  {k:"N9", t:"选择与去重", s:"todo", d:"—", note:"贪心集合覆盖、交付前去重（尚未实现，示例占位）", hash:""},
+  {k:"N10", t:"审阅与交付", s:"todo", d:"—", note:"审阅、交付包、CI（本界面即其原型）", hash:""},
+];
+const A = [
+  {id:"fifo_flags_empty_full", scope:"fifo_top", type:"fifo_flags", src:["A"], leg:"none", level:"port", st:"PROVEN", engine:"k-induction 第 3 步", cover:"—（不变式）",
+   sva:"assert property (@(posedge clk) disable iff (!rst_n)\n  !(full && empty));", ver:"always @(posedge clk) if (rst_n)\n  fifo_flags_empty_full: assert(!((full && empty)));",
+   ex:"任何时刻 full 和 empty 不同时为 1。", ev:"N2 接口事件 push/full、pop/empty（高置信）", assumes:["no_push_when_full"], diff:"一致（126 拍，0 次失败）", review:"NEW"},
+  {id:"counter_range_count", scope:"fifo_top.u_ctrl", type:"counter_range", src:["A"], leg:"none", level:"internal", st:"PROVEN", engine:"k-induction 第 2 步", cover:"—（不变式）",
+   sva:"assert property (@(posedge clk) disable iff (!rst_n)\n  count <= 16);", ver:"always @(posedge clk) if (rst_n)\n  counter_range_count: assert((count <= 16));",
+   ex:"占用计数 count 始终不超过 16。", ev:"计数器 count（5 位）与 16 比较，复位值 0", assumes:["no_push_when_full"], diff:"一致", review:"NEW"},
+  {id:"fifo_overflow_count", scope:"fifo_top.u_ctrl", type:"fifo_overflow", src:["A"], leg:"none", level:"internal", st:"FAILED", engine:"BMC 第 18 步出现反例", cover:"可达（第 17 步）",
+   sva:"assert property (@(posedge clk) disable iff (!rst_n)\n  full && push && !pop |=> count == $past(count));", ver:"always @(posedge clk) if (rst_n && vm_n2b_pv_clk && $past(rst_n))\n  fifo_overflow_count: assert(!($past(((full && push) && !(pop)))) || ((count == $past(count))));",
+   ex:"当 full 为 1、push 为 1 且 pop 为 0 时，下一周期 count 必须保持不变。", ev:"满时写被忽略，占用计数 count 不变", assumes:[], diff:"一致（三路都在第 18 拍失败）", review:"NEW", cex:true},
+  {id:"fifo_underflow_count", scope:"fifo_top.u_ctrl", type:"fifo_underflow", src:["A"], leg:"none", level:"internal", st:"PROVEN", engine:"k-induction 第 2 步", cover:"可达（第 2 步）",
+   sva:"assert property (@(posedge clk) disable iff (!rst_n)\n  empty && pop && !push |=> count == $past(count));", ver:"always @(posedge clk) if (rst_n && vm_n2b_pv_clk && $past(rst_n))\n  fifo_underflow_count: assert(...);",
+   ex:"当 empty 为 1、pop 为 1 且 push 为 0 时，下一周期 count 必须保持不变。", ev:"空时读被忽略", assumes:[], diff:"一致", review:"ACCEPTED"},
+  {id:"reset_value_waddr", scope:"fifo_top.u_ctrl", type:"reset_value", src:["A"], leg:"none", level:"port", st:"PROVEN", engine:"k-induction 第 1 步", cover:"可达（第 0 步）",
+   sva:"assert property (@(posedge clk)\n  !rst_n |=> waddr == 0);", ver:"always @(posedge clk) if (vm_n2b_pv_clk)\n  reset_value_waddr: assert(!($past(!(rst_n))) || ((waddr == 0)));",
+   ex:"rst_n 为 0（复位有效）的下一周期，waddr 必须为 0。", ev:"waddr 在复位分支被赋常量 0", assumes:[], diff:"一致", review:"ACCEPTED"},
+  {id:"reset_value_raddr", scope:"fifo_top.u_ctrl", type:"reset_value", src:["A"], leg:"none", level:"port", st:"PROVEN", engine:"k-induction 第 1 步", cover:"可达（第 0 步）",
+   sva:"assert property (@(posedge clk)\n  !rst_n |=> raddr == 0);", ver:"…", ex:"rst_n 为 0 的下一周期，raddr 必须为 0。", ev:"raddr 在复位分支被赋常量 0", assumes:[], diff:"一致", review:"ACCEPTED"},
+  {id:"handshake_hold_out_valid", scope:"src", type:"handshake_hold", src:["A","C"], leg:"none", level:"port", st:"PROVEN", engine:"k-induction 第 2 步", cover:"可达（第 5 步）",
+   sva:"assert property (@(posedge clk) disable iff (!rst_n)\n  out_valid && !out_ready |=> out_valid);", ver:"always @(posedge clk) if (rst_n && vm_n2b_pv_clk && $past(rst_n))\n  handshake_hold_out_valid: assert(!($past((out_valid && !(out_ready)))) || (out_valid));",
+   ex:"当 out_valid 为 1 且 out_ready 为 0 时，下一周期 out_valid 必须保持为 1。", ev:"N2 接口事件 valid/ready：本实例驱动 valid；LLM 也提出了同一性质（已合并）", assumes:[], diff:"一致", review:"NEW"},
+  {id:"tree_out_valid", scope:"src", type:"tree", src:["B"], leg:"user", level:"port", st:"PROVEN", engine:"k-induction 第 1 步", cover:"可达（第 2 步）",
+   sva:"assert property (@(posedge clk) disable iff (!rst_n)\n  st == 2 |-> out_valid);", ver:"…", ex:"当 st 为 2（SEND）时，out_valid 必须为 1。", ev:"决策树：S_mine 1033 行上训练，叶子覆盖 412 行", assumes:[], diff:"一致", review:"NEW"},
+  {id:"tree_st_13", scope:"src", type:"tree", src:["B"], leg:"user", level:"internal", st:"FAILED", engine:"BMC 第 31 步出现反例", cover:"可达",
+   sva:"assert property (@(posedge clk) disable iff (!rst_n)\n  start |=> st == 1);", ver:"…", ex:"当 start 为 1 时，下一周期 st 必须为 1。", ev:"决策树：只在训练轨迹上成立（trace_overfit）", assumes:[], diff:"一致（三路都在第 31 拍失败）", review:"NEW"},
+  {id:"tree_five_3", scope:"src", type:"tree", src:["B"], leg:"unknown", level:"port", st:"REVIEW_REQUIRED", engine:"BMC 20 步内未失败", cover:"20 步内未达到",
+   sva:"assert property (@(posedge clk) disable iff (!rst_n)\n  $past(five) && !go |-> !five);", ver:"…", ex:"若上一周期 five 为 1 且本周期 go 为 0，则 five 必须为 0。", ev:"来自合法性未知的轨迹，默认降权", assumes:[], diff:"一致", review:"NEW"},
+  {id:"handshake_data_out_data", scope:"src", type:"handshake_data", src:["A"], leg:"none", level:"port", st:"BOUNDED", engine:"BMC 20 步内未失败，k-induction 未收敛（L2 待加算力）", cover:"可达（第 5 步）",
+   sva:"assert property (@(posedge clk) disable iff (!rst_n)\n  out_valid && !out_ready |=> out_data == $past(out_data));", ver:"…", ex:"当 out_valid 为 1 且 out_ready 为 0 时，下一周期 out_data 必须保持不变。", ev:"out_data 与 out_valid 同前缀，按命名认为是它携带的数据（弱证据）", assumes:[], diff:"一致", review:"NEW"},
+  {id:"mutex_empty_full", scope:"fifo_top.u_ctrl", type:"mutex", src:["A"], leg:"none", level:"port", st:"VACUOUS", engine:"—", cover:"前件不可达",
+   sva:"assert property (@(posedge clk) disable iff (!rst_n)\n  !(empty && full));", ver:"…", ex:"empty 和 full 不同时为 1。", ev:"驱动条件互斥（count == 0 与 count == 16）；已被 fifo_flags_empty_full 吸收", assumes:[], diff:"一致", review:"REJECTED", why:"重复"},
+];
+const LINT = [
+  {cls:"已识别结构", sev:"crit", chk:"fifo.overflow", inst:"fifo_top.u_ctrl", msg:"FIFO 上溢：满时写入仍改变了占用计数 count（形式验证：第 18 拍出现反例）", ev:"static+formal", cex:true},
+  {cls:"状态机", sev:"warn", chk:"fsm.unreachable_state", inst:"src", msg:"状态机 st 的编码 0 不在单热码集合中，default 分支可达（形式验证已到达）", ev:"formal"},
+  {cls:"控制完整性", sev:"warn", chk:"control.case_incomplete", inst:"fifo_top.u_mem", msg:"case 不全且没有 default：综合会推断锁存或保持", ev:"static"},
+  {cls:"数组与算术", sev:"warn", chk:"array.truncation", inst:"fifo_top.u_ctrl", msg:"count + (push && !full) 结果 6 位，赋给 5 位的 count：最高位被截断", ev:"static"},
+  {cls:"X 与驱动", sev:"info", chk:"x.assign", inst:"fifo_top.u_mem", msg:"rdata 在读使能无效时赋 'x", ev:"static"},
+  {cls:"死代码与不可达分支", sev:"good", chk:"dead.branch", inst:"fifo_top.u_ctrl", msg:"所有 9 个分支都可达（cover 全部到达）", ev:"formal"},
+];
+const ASSUME = [
+  {id:"N3A_0001", type:"协议保持", text:"in_valid && !in_ready |=> in_valid", conf:"高", rec:"建议接受", st:"ACCEPTED", strength:"通过"},
+  {id:"N3A_0002", type:"流控", text:"full |-> !push", conf:"中", rec:"需确认", st:"ACCEPTED", strength:"通过", note:"已在配置中"},
+  {id:"N3A_0003", type:"流控", text:"empty |-> !pop", conf:"中", rec:"需确认", st:"PROPOSED", strength:"通过"},
+  {id:"N3A_0004", type:"数据取值范围", text:"len >= 2 && len <= 10", conf:"低", rec:"默认不采纳", st:"REJECTED", strength:"过强：LONG 不可达"},
+];
+const YAML = `<span class="cm"># VeriMine 配置（N0a 推断后经用户确认）</span>
+schema_version: 1
+status: confirmed
+design:
+  name: fifo_top
+  top: fifo_top
+  filelist: [fifo.f]
+clocks: [{name: clk, edge: posedge}]
+resets: [{name: rst_n, active: low, type: async}]
+<span class="kw">assumes:</span>
+  - {name: no_push_when_full, expr: "full |-> !push"}
+  - {name: n3a_hold_rx_in_valid, expr: "in_valid && !in_ready |=> in_valid"}  <span class="cm"># N3a N3A_0001 协议保持，高置信</span>
+llm: {mode: off}
+run: {seed: 1, profile: default}`;
+const CI = {
+  gh: `<span class="cm"># .github/workflows/verimine.yml</span>
+<span class="kw">on:</span> [pull_request]
+<span class="kw">jobs:</span>
+  sva:
+    runs-on: ubuntu-latest
+    container: verimine/verimine:0.1
+    steps:
+      - uses: actions/checkout@v4
+      - run: verimine run verimine.yaml --incremental --junit out/junit.xml
+      - uses: verimine/pr-comment@v1     <span class="cm"># 结果回写到合并请求</span>`,
+  gl: `<span class="cm"># .gitlab-ci.yml</span>
+<span class="kw">verimine:</span>
+  image: verimine/verimine:0.1
+  script:
+    - verimine run verimine.yaml --incremental --junit junit.xml
+  artifacts:
+    reports: { junit: junit.xml }`,
+  jk: `<span class="cm">// Jenkinsfile</span>
+stage('SVA') {
+  steps { sh 'verimine run verimine.yaml --incremental --junit junit.xml' }
+  post { always { junit 'junit.xml' } }
+}`,
+};
+const STATUS = {
+  PROVEN: ["good","✓","PROVEN 已证明"], BOUNDED: ["warn","~","BOUNDED 有界"], FAILED: ["crit","!","FAILED 失败"],
+  VACUOUS: ["serious","∅","VACUOUS 空洞"], REVIEW_REQUIRED: ["serious","?","REVIEW_REQUIRED"],
+};
+const REVIEW = {NEW: ["neutral","•","待审阅"], ACCEPTED: ["good","✓","已接受"], REJECTED: ["crit","×","已拒绝"], PENDING: ["warn","…","待定"]};
+const LEG = {none:"无轨迹（结构）", user:"用户轨迹", constrained:"受约束激励", unknown:"未知"};
+
+// ------------------------------------------------------------------ helpers
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const badge = ([c, i, t]) => `<span class="st ${c}"><i>${i}</i>${t}</span>`;
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const hl = s => esc(s).replace(/\b(assert|property|disable iff|posedge|always|if|cover)\b/g, '<span class="kw">$1</span>');
+function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 2200); }
+function tip(e, html) { const t = $("#tip"); if (!html) { t.style.display = "none"; return; } t.innerHTML = html; t.style.display = "block";
+  t.style.left = Math.min(e.clientX + 12, innerWidth - 220) + "px"; t.style.top = (e.clientY + 14) + "px"; }
+
+// ------------------------------------------------------------------ routing
+function go() {
+  const p = (location.hash || "#overview").slice(1);
+  $$(".page").forEach(x => x.classList.toggle("on", x.id === "p-" + p));
+  $$("#nav a").forEach(a => a.classList.toggle("on", a.dataset.p === p));
+  main.scrollTop = 0;
+}
+addEventListener("hashchange", go);
+const main = document.querySelector("main");
+
+// ------------------------------------------------------------------ pipeline
+const stIcon = {done: ["good","✓","完成"], warn: ["warn","!","有提示"], todo: ["neutral","–","未实现"], run: ["run","…","运行中"], wait: ["neutral","·","等待"]};
+let selStage = "N5";
+function renderPipe() {
+  for (const id of ["#pipe-mini", "#pipe-full"]) {
+    $(id).innerHTML = STAGES.map(s => `<div class="stage ${s.s === "todo" ? "todo" : ""} ${id === "#pipe-full" && s.k === selStage ? "on" : ""}" data-k="${s.k}">
+      <div class="k">${s.k}</div><div class="t">${s.t}</div>${badge(stIcon[s.s])}<div class="ver">${s.d}</div></div>`).join("");
+  }
+  $$(".stage").forEach(el => el.onclick = () => { selStage = el.dataset.k; location.hash = "#pipeline"; renderPipe(); renderStage(); });
+}
+function renderStage() {
+  const s = STAGES.find(x => x.k === selStage);
+  $("#stage-detail").innerHTML = `<h2>${s.k} ${s.t}</h2>${badge(stIcon[s.s])}
+    <div class="kv" style="margin-top:12px"><div>结果</div><div>${s.note}</div><div>耗时</div><div>${s.d}</div>
+    <div>输出哈希</div><div class="mono">${s.hash || "—"}</div><div>报告</div><div>${s.s === "todo" ? "—" : `<a href="#" onclick="toast('演示：打开 ${s.k.toLowerCase()}_report.md');return false">${s.k.toLowerCase()}_report.md</a>`}</div></div>
+    <p class="small muted">${s.s === "todo" ? "按规格顺序排在后面，界面先占位。" : "输入哈希未变时，下次运行直接复用这个结果。"}</p>`;
+}
+const LOG = [
+  ["N0", "ok", "配置校验通过；source_hash 7e41… build_hash 9f3c…"], ["N1", "ok", "slang 展开完成：2 个实例，0 个 BLOCKED"],
+  ["N2", "ok", "VDG 58 节点；计数器 3；接口事件 4"], ["N2b", "w", "fifo.overflow 失败（第 18 拍）→ 候选缺陷，已交给 N8"],
+  ["N3", "ok", "随机 8 次 + 形式探索 3 条；分支覆盖 92%"], ["N3a", "w", "fifo_top.u_ctrl: empty |-> !pop 为 OPEN"],
+  ["N4", "ok", "候选池 8 条（A 8，B 0，C 0）"], ["N5", "ok", "三方差分测试 13/13 一致"],
+];
+$("#run-btn").onclick = async () => {
+  const b = $("#run-btn"); b.disabled = true; b.textContent = "运行中…";
+  const keep = STAGES.map(s => s.s); const log = $("#log"); log.innerHTML = "";
+  STAGES.forEach(s => { if (s.s !== "todo") s.s = "wait"; }); renderPipe();
+  for (let i = 0; i < LOG.length; i++) {
+    const s = STAGES.find(x => x.k === LOG[i][0]); s.s = "run"; renderPipe();
+    await new Promise(r => setTimeout(r, 450));
+    s.s = keep[STAGES.indexOf(s)]; renderPipe();
+    log.innerHTML += `<div><span class="muted">16:4${i}:0${i}</span> <b>${LOG[i][0]}</b> <span class="${LOG[i][1]}">${LOG[i][2]}</span></div>`; log.scrollTop = 1e9;
+  }
+  log.innerHTML += `<div class="ok">完成：N6–N10 尚未实现，演示到 N5 为止</div>`;
+  b.disabled = false; b.textContent = "▶ 运行流水线"; toast("演示运行完成（未调用后端）");
+};
+
+// ------------------------------------------------------------------ waveform (counterexample)
+function waveSVG() {
+  const sig = [
+    ["clk", "clk"], ["rst_n", [0,1,1,1,1,1,1,1,1,1]], ["push", [0,1,1,1,0,1,1,1,1,1]], ["pop", [0,0,0,0,0,0,0,0,0,0]],
+    ["full", [0,0,0,0,0,0,0,1,1,1]], ["count", ["0","0","1","2","3","3","…","16","16","17"]],
+  ];
+  const n = 10, x0 = 70, w = 52, h = 26, top = 22, H = top + sig.length * h + 24;
+  let s = `<svg class="wave" viewBox="0 0 ${x0 + n * w + 10} ${H}">`;
+  s += `<rect x="${x0 + 8 * w}" y="${top - 4}" width="${w}" height="${H - top - 18}" fill="#eef4fc"/>`;
+  s += `<rect x="${x0 + 9 * w}" y="${top - 4}" width="${w}" height="${H - top - 18}" fill="#fbe9e9"/>`;
+  s += `<text x="${x0 + 8 * w + w / 2}" y="13" text-anchor="middle">前件成立</text><text x="${x0 + 9 * w + w / 2}" y="13" text-anchor="middle" fill="#a62323">✗ 失败</text>`;
+  sig.forEach(([name, v], r) => {
+    const y = top + r * h, hi = y + 4, lo = y + 18;
+    s += `<text x="6" y="${y + 15}">${name}</text>`;
+    if (v === "clk") {
+      let d = `M${x0} ${lo}`; for (let i = 0; i < n; i++) { const a = x0 + i * w; d += ` L${a} ${hi} L${a + w / 2} ${hi} L${a + w / 2} ${lo} L${a + w} ${lo}`; }
+      s += `<path d="${d}" fill="none" stroke="#85847e" stroke-width="1.5"/>`;
+    } else if (typeof v[0] === "number") {
+      let d = `M${x0} ${v[0] ? hi : lo}`; v.forEach((b, i) => { const a = x0 + i * w, yy = b ? hi : lo; d += ` L${a} ${yy} L${a + w} ${yy}`; });
+      s += `<path d="${d}" fill="none" stroke="#2a78d6" stroke-width="2"/>`;
+    } else {
+      v.forEach((t, i) => { const a = x0 + i * w; s += `<path d="M${a + 3} ${hi} L${a + w - 3} ${hi} L${a + w} ${(hi + lo) / 2} L${a + w - 3} ${lo} L${a + 3} ${lo} L${a} ${(hi + lo) / 2} Z" fill="${i === 9 ? "#fbdada" : "#eef4fc"}" stroke="#2a78d6" stroke-width="1"/><text x="${a + w / 2}" y="${y + 15}" text-anchor="middle" fill="#0b0b0b">${t}</text>`; });
+    }
+  });
+  for (let i = 0; i < n; i++) s += `<text x="${x0 + i * w + w / 2}" y="${H - 6}" text-anchor="middle">${i + 9}</text>`;
+  s += `</svg>`;
+  return s;
+}
+
+// ------------------------------------------------------------------ N2b page
+function renderLint() {
+  const cls = ["已识别结构", "状态机", "数组与算术", "控制完整性"];
+  $("#lint-classes").innerHTML = [["候选 RTL 缺陷", 1, "形式验证失败的断言"], ["警告", 3, "静态或形式"], ["断言 / cover", "23 / 31", "全部送 Yosys + SymbiYosys"], ["误报（已标记）", 0, "按检查类记录"]]
+    .map(([l, v, d]) => `<div class="card tile"><div class="label">${l}</div><div class="value">${v}</div><div class="delta">${d}</div></div>`).join("");
+  const sev = {crit: ["crit","!","错误"], warn: ["warn","!","警告"], info: ["neutral","i","提示"], good: ["good","✓","通过"]};
+  $("#lint-table").innerHTML = `<tr><th>级别</th><th>检查类</th><th>实例</th><th>内容</th><th>证据</th></tr>` +
+    LINT.map((f, i) => `<tr class="click ${i === 0 ? "sel" : ""}" data-i="${i}"><td>${badge(sev[f.sev])}</td><td style="white-space:nowrap">${f.cls}</td><td class="mono">${f.inst}</td><td>${esc(f.msg)}</td><td><span class="tag">${f.ev}</span></td></tr>`).join("");
+  const show = i => {
+    const f = LINT[i]; $$("#lint-table tr").forEach(r => r.classList.toggle("sel", r.dataset.i == i));
+    $("#lint-detail").innerHTML = `<h2>${f.chk}</h2>${badge(sev[f.sev])}<p>${esc(f.msg)}</p>
+      <div class="kv"><div>实例</div><div class="mono">${f.inst}</div><div>证据</div><div>${f.ev}</div><div>位置</div><div class="mono">rtl/fifo_ctrl.sv:21</div></div>
+      ${f.cex ? `<h2>反例（最短触发序列）</h2>${waveSVG()}<p class="small muted">第 17 拍 full 为 1、push 为 1、pop 为 0（前件成立），第 18 拍 count 从 16 变成 17。对应代码 <code>count &lt;= count + (push &amp;&amp; !full) - …</code>：<code>full</code> 由 <code>count == 16</code> 得到，但 count 是 5 位，与上面的截断警告相关。</p>
+      <div class="actions"><button class="btn primary" onclick="toast('演示：标记为真实缺陷')">确认是缺陷</button><button class="btn" onclick="toast('演示：转为 env_missing，生成假设候选')">缺环境假设</button><button class="btn" onclick="toast('演示：已标记为误报')">误报</button></div>` : `<p class="small muted">点击左侧有反例的条目可以看到波形。</p>`}`;
+  };
+  $$("#lint-table tr.click").forEach(r => r.onclick = () => show(+r.dataset.i));
+  show(0);
+}
+
+// ------------------------------------------------------------------ N3a page
+function renderAssume() {
+  const st = {ACCEPTED: ["good","✓","已接受"], PROPOSED: ["neutral","•","待确认"], REJECTED: ["crit","×","已拒绝"]};
+  $("#assume-table").innerHTML = `<tr><th>ID</th><th>类型</th><th>假设</th><th>置信度</th><th>建议</th><th>过强检查</th><th>状态</th><th></th></tr>` +
+    ASSUME.map((a, i) => `<tr><td class="mono">${a.id}</td><td>${a.type}</td><td><code>${esc(a.text)}</code></td><td>${a.conf}</td><td>${a.rec}</td>
+      <td>${a.strength.startsWith("过强") ? badge(["serious","!",a.strength]) : badge(["good","✓",a.strength])}</td><td>${badge(st[a.st])}${a.note ? `<div class="small muted">${a.note}</div>` : ""}</td>
+      <td>${a.st === "PROPOSED" ? `<button class="btn sm" data-a="${i}" data-v="ACCEPTED">接受</button> <button class="btn sm" data-a="${i}" data-v="REJECTED">拒绝</button>` : ""}</td></tr>`).join("");
+  $$("#assume-table button").forEach(b => b.onclick = () => { ASSUME[b.dataset.a].st = b.dataset.v;
+    toast(b.dataset.v === "ACCEPTED" ? "演示：已写入配置 assumes，build_hash 将变化，下游阶段会重算" : "演示：已记录拒绝，下次运行仍为拒绝"); renderAssume(); });
+}
+
+// ------------------------------------------------------------------ review page
+let selA = A[2].id, fState = "all";
+function filtered() {
+  const src = $("#f-src").value, st = $("#f-status").value, lv = $("#f-level").value, q = $("#f-q").value.trim().toLowerCase();
+  return A.filter(a => (fState === "all" || a.review === fState || (fState === "NEW" && a.review === "PENDING"))
+    && (!src || a.src.includes(src)) && (!st || a.st === st) && (!lv || a.level === lv)
+    && (!q || (a.id + a.sva + a.scope).toLowerCase().includes(q)));
+}
+function renderReview() {
+  const rows = filtered();
+  $("#nav-review").textContent = A.filter(a => a.review === "NEW" || a.review === "PENDING").length;
+  $("#t-pending").textContent = A.filter(a => a.review === "NEW" || a.review === "PENDING").length;
+  $("#t-proven").textContent = A.filter(a => a.st === "PROVEN").length;
+  $("#rv-table").innerHTML = `<tr><th>断言</th><th>来源</th><th>验证</th><th>审阅</th></tr>` + (rows.length ? rows.map(a => `
+    <tr class="click ${a.id === selA ? "sel" : ""}" data-id="${a.id}"><td><div class="mono">${a.id}</div><div class="small muted">${a.scope} · ${a.level === "port" ? "端口级" : "内部级"}</div></td>
+    <td>${a.src.map(s => `<span class="tag src-${s}">${s}</span>`).join("")}</td><td>${badge(STATUS[a.st])}</td><td>${badge(REVIEW[a.review])}</td></tr>`).join("")
+    : `<tr><td colspan="4" class="empty">没有符合条件的断言</td></tr>`);
+  $$("#rv-table tr.click").forEach(r => r.onclick = () => { selA = r.dataset.id; renderReview(); });
+  renderDetail();
+}
+function renderDetail() {
+  const a = A.find(x => x.id === selA);
+  if (!a) { $("#rv-detail").innerHTML = `<div class="empty">选择左侧的一条断言</div>`; return; }
+  $("#rv-detail").innerHTML = `
+    <div class="actions" style="justify-content:space-between"><h2 style="margin:0" class="mono">${a.id}</h2>${badge(STATUS[a.st])}</div>
+    <div class="explain"><b>含义</b>　${a.ex}</div>
+    <div class="tabs" id="dt"><button class="on" data-t="d">交付版</button><button data-t="v">验证版</button>${a.cex ? `<button data-t="w">反例波形</button>` : ""}</div>
+    <div id="dt-body"></div>
+    <h2>证据链</h2>
+    <ul class="chain">
+      <li><span>①</span><span class="muted">来源</span><span>${a.src.map(s => `<span class="tag src-${s}">${s}</span>`).join("")}${a.type} · ${a.ev}</span></li>
+      <li><span>②</span><span class="muted">轨迹</span><span>${LEG[a.leg]}${a.leg === "unknown" ? "（默认降权，不自动接受）" : ""}</span></li>
+      <li><span>③</span><span class="muted">形式证明</span><span>${a.engine}</span></li>
+      <li><span>④</span><span class="muted">cover 见证</span><span>${a.cover}</span></li>
+      <li><span>⑤</span><span class="muted">三方差分</span><span>${a.diff}</span></li>
+      <li><span>⑥</span><span class="muted">依赖假设</span><span>${a.assumes.length ? a.assumes.map(x => `<code>${x}</code>`).join(" ") : "无"}</span></li>
+    </ul>
+    ${a.review === "REJECTED" ? `<p class="small">已拒绝，原因：${a.why || "—"}</p>` : ""}
+    <div class="actions">
+      <button class="btn primary" data-r="ACCEPTED">接受</button><button class="btn" data-r="REJECTED">拒绝…</button><button class="btn" data-r="PENDING">待定</button>
+      <span class="spacer"></span><span class="small muted">审阅用时 0:42</span>
+    </div>`;
+  const tabs = {d: `<pre class="code">${hl(a.id + ": " + a.sva)}</pre>`, v: `<pre class="code">${hl(a.ver)}</pre><p class="small muted">Yosys 不支持并发断言：降级为监视器，disable iff 降级为门控，|=> 降级为 $past。</p>`, w: waveSVG()};
+  const set = t => { $$("#dt button").forEach(b => b.classList.toggle("on", b.dataset.t === t)); $("#dt-body").innerHTML = tabs[t]; };
+  $$("#dt button").forEach(b => b.onclick = () => set(b.dataset.t)); set("d");
+  $$("#rv-detail [data-r]").forEach(b => b.onclick = () => {
+    if (b.dataset.r === "REJECTED") { $("#modal").classList.add("on"); return; }
+    a.review = b.dataset.r; toast(b.dataset.r === "ACCEPTED" ? `已接受 ${a.id}` : `已标为待定`); renderReview();
+  });
+}
+$("#m-cancel").onclick = () => $("#modal").classList.remove("on");
+$("#m-ok").onclick = () => { const a = A.find(x => x.id === selA); a.review = "REJECTED"; a.why = document.querySelector('input[name=why]:checked').value;
+  $("#modal").classList.remove("on"); toast(`已拒绝 ${a.id}（${a.why}），写入反馈数据`); renderReview(); };
+$$("#f-state button").forEach(b => b.onclick = () => { fState = b.dataset.v; $$("#f-state button").forEach(x => x.classList.toggle("on", x === b)); renderReview(); });
+["#f-src", "#f-status", "#f-level", "#f-q"].forEach(s => $(s).addEventListener("input", renderReview));
+$("#batch").onclick = () => { let n = 0; A.forEach(a => { if (a.src[0] === "A" && a.st === "PROVEN" && a.review !== "ACCEPTED") { a.review = "ACCEPTED"; n++; } });
+  toast(`批量接受 ${n} 条（A 来源且 PROVEN）`); renderReview(); };
+
+// ------------------------------------------------------------------ overview distribution (segmented bar)
+function renderDist() {
+  const col = {PROVEN: "var(--good)", BOUNDED: "var(--warning)", FAILED: "var(--critical)", VACUOUS: "var(--serious)", REVIEW_REQUIRED: "#a9a8a2"};
+  const parts = Object.keys(col).map(k => [k, A.filter(a => a.st === k).length, col[k]]).filter(p => p[1]);
+  const tot = parts.reduce((s, p) => s + p[1], 0);
+  $("#dist").innerHTML = parts.map(([k, v, c]) => `<div style="flex:${v};background:${c}" data-t="${STATUS[k][2]}：${v} 条（${Math.round(v / tot * 100)}%）"></div>`).join("");
+  $("#dist-legend").innerHTML = parts.map(([k, v, c]) => `<span style="--c:${c}">${STATUS[k][1]} ${STATUS[k][2]} ${v}</span>`).join("");
+  $$("#dist div").forEach(d => { d.onmousemove = e => tip(e, d.dataset.t); d.onmouseleave = () => tip(); });
+}
+
+// ------------------------------------------------------------------ coverage
+function renderCoverage() {
+  const m = [["COI 覆盖", 78, 61, "被已证明断言的影响锥触及的逻辑比例"], ["可达性覆盖", 92, 88, "行、分支、状态机的 cover"],
+             ["证明核覆盖（近似）", 54, 40, "用变异杀伤近似，开源栈拿不到证明核时如此标注"], ["空泛性", 3, 5, "前件不可达的比例，越低越好"]];
+  $("#meters").innerHTML = m.map(([l, v, p, d]) => `<div class="meter"><div class="row"><span>${l}</span><b>${v}%</b></div>
+    <div class="bar" data-t="${l}：本轮 ${v}%，上一轮 ${p}%"><span style="width:${v}%"></span><span style="width:${p}%;background:transparent;border-right:2px solid var(--navy);border-radius:0"></span></div>
+    <div class="small muted">${d} · 上一轮 ${p}%</div></div>`).join("");
+  $$("#meters .bar").forEach(b => { b.onmousemove = e => tip(e, b.dataset.t); b.onmouseleave = () => tip(); });
+  // rounds: single series line, COI coverage per round, threshold dashed
+  const pts = [[0, 61], [1, 72], [2, 78]], X = i => 50 + i * 160, Y = v => 170 - (v - 50) * 3.2;
+  let s = "";
+  for (const g of [50, 60, 70, 80, 90]) s += `<line x1="40" x2="400" y1="${Y(g)}" y2="${Y(g)}" stroke="#e3e2dd"/><text x="34" y="${Y(g) + 4}" text-anchor="end" font-size="11" fill="#85847e">${g}%</text>`;
+  s += `<line x1="40" x2="400" y1="${Y(85)}" y2="${Y(85)}" stroke="#85847e" stroke-dasharray="4 4"/><text x="400" y="${Y(85) - 5}" text-anchor="end" font-size="11" fill="#52514e">阈值 85%</text>`;
+  s += `<path d="${pts.map(([i, v], k) => `${k ? "L" : "M"}${X(i)} ${Y(v)}`).join(" ")}" fill="none" stroke="#2a78d6" stroke-width="2"/>`;
+  pts.forEach(([i, v]) => { s += `<circle cx="${X(i)}" cy="${Y(v)}" r="5" fill="#2a78d6" stroke="#fff" stroke-width="2" data-t="${i === 0 ? "V0（无闭环）" : "第 " + i + " 轮"}：COI 覆盖 ${v}%"/><text x="${X(i)}" y="190" text-anchor="middle" font-size="11" fill="#52514e">${i === 0 ? "V0" : "第 " + i + " 轮"}</text>`; });
+  s += `<text x="${X(2) + 10}" y="${Y(78) + 4}" font-size="12" fill="#0b0b0b">78%</text><circle cx="${X(2) + 0.1}" cy="${Y(78)}" r="14" fill="transparent" data-t="第 2 轮：COI 覆盖 78%（+6）"/>`;
+  $("#rounds").innerHTML = s;
+  $$("#rounds circle").forEach(c => { c.onmousemove = e => tip(e, c.dataset.t); c.onmouseleave = () => tip(); });
+}
+
+// ------------------------------------------------------------------ delivery / settings
+function renderCI(t) { $$("#ci-tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === t)); $("#ci-code").innerHTML = CI[t]; }
+$$("#ci-tabs button").forEach(b => b.onclick = () => renderCI(b.dataset.t));
+$$(".dl").forEach(b => b.onclick = () => toast("演示：不连接后端，没有实际文件"));
+$("#pack").onclick = () => toast("演示：交付包已生成（13 条断言，2 个 bind）");
+$$(".seg-ctl:not(#f-state) button").forEach(b => b.addEventListener("click", () => {
+  [...b.parentNode.children].forEach(x => x.classList.toggle("on", x === b));
+  if (b.parentNode.id === "llm-mode") toast(b.textContent === "境外云端" ? "境外云端默认禁用，需要显式开启并经法务确认" : `演示：LLM 模式切换为「${b.textContent}」`);
+}));
+$("#yaml").innerHTML = YAML;
+$("#proj").onchange = e => toast(`演示：切换项目为 ${e.target.value}（数据不变）`);
+
+// ------------------------------------------------------------------ init
+renderPipe(); renderStage(); renderLint(); renderAssume(); renderReview(); renderDist(); renderCoverage(); renderCI("gh");
+$("#log").innerHTML = `<div class="muted">点击右上角「运行流水线」查看演示运行。</div>`;
+go();
+</script>
+</body>
+</html>
