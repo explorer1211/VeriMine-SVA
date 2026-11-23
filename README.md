@@ -13,6 +13,7 @@ SVA-Agnet automates legacy RTL verification for chip firms, IP vendors, and labs
 | N3 | Trace preparation: user waveforms (VCD/FST via wellen) → user testbench → generated stimulus (random under confirmed assumes, formal exploration of gaps, conservative without assumes); sampled per cycle, trimmed, cut into test cases, split into S_mine / S_val; branch / state / transition / toggle coverage and gap list | [docs/N3.md](docs/N3.md) |
 | N3a | Assumption mining: candidates from N2 interface events (protocol hold, flow control) and from the user's traces (mutex, one-hot, reset values, minimum hold, ranges); trace check, over-strength check with N2b covers, assume-guarantee for submodules (DISCHARGED / OPEN), confirmation into `assumes`, env_missing attribution of N2b counterexamples | [docs/N3a.md](docs/N3a.md) |
 | N4 | Candidate mining: path A templates over N2 evidence (reset values, one-hot, FSM transitions, mutex, handshake hold, counter range, FIFO), path B decision trees on S_mine (FTO-sensitive, off by default), path C LLM on masked structural summaries (JSON-schema output, audit log, off by default); one normalized, deduplicated pool tagged with source / trace legality / assumes, checked on S_mine, budget driven by coverage gaps | [docs/N4.md](docs/N4.md) |
+| N5 | SVA generation: delivery version (standard SVA checker modules + bind file) and verification version (Yosys immediate assertions) from the same IR, degraded per an engine capability matrix with every degradation recorded; antecedent covers; three-way differential test (IR offline, Verilator, SymbiYosys with inputs pinned to a vector) | [docs/N5.md](docs/N5.md) |
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -e '.[dev]'   # dev includes pywellen
@@ -25,5 +26,6 @@ python -m venv .venv && .venv/bin/pip install -e '.[dev]'   # dev includes pywel
 .venv/bin/verimine n3 examples/fifo/verimine.yaml    # needs Icarus Verilog (or Verilator)
 .venv/bin/verimine n3a examples/fifo/verimine.yaml   # add --accept-high / --accept IDs to write assumes
 .venv/bin/verimine n4 examples/fifo/verimine.yaml    # candidate pool; run.params.n4_path_b: true for path B
+.venv/bin/verimine n5 examples/fifo/verimine.yaml    # differential test needs Verilator + sby
 .venv/bin/pytest
 ```

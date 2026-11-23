@@ -259,6 +259,38 @@ def _cmd_n4(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_n5(args: argparse.Namespace) -> int:
+    from verimine.n5 import run_n5
+
+    try:
+        res = run_n5(args.config, workspace=args.workspace, write=not args.dry_run,
+                     differential=False if args.no_diff else None)
+    except StageError as e:
+        for i in e.issues:
+            print(f"错误 {i}", file=sys.stderr)
+        return e.exit_code
+    if args.json:
+        print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False, sort_keys=True, default=str))
+        return 0
+    for w in res.warnings:
+        print(f"警告 [{w['code']}] {w['message']}", file=sys.stderr)
+    c = res.counts()
+    print(f"N5 完成：断言 {c['asserts']}，前件 cover {c['covers']}；交付版 {c['delivery']}，验证版 {c['verification']}")
+    deg = res.degradations()
+    if deg:
+        print("  验证版降级：" + "，".join(f"{k} {v}" for k, v in deg.items()))
+    if res.diff.get("ran"):
+        print(f"  三方差分测试（{res.diff['cycles']} 拍）：" + "，".join(f"{k} {v}" for k, v in c["diff"].items()))
+    else:
+        print(f"  三方差分测试未运行：{res.diff.get('reason')}")
+    for r in res.props:
+        if r.diff.get("status") == "mismatch":
+            print(f"  不一致 {r.name}：{r.cand.text}")
+    if not args.dry_run:
+        print(f"  交付版 runs/{res.n4.n3.n2.n1.n0.hashes['run_hash']}/n5_sva.sv、n5_bind.sv；报告 n5_report.md")
+    return 0
+
+
 def _cmd_infer(args: argparse.Namespace) -> int:
     from verimine.n0a import infer
 
@@ -402,6 +434,14 @@ def main(argv: list[str] | None = None) -> int:
     n4.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
     n4.add_argument("--audit-export", type=Path, metavar="FILE", help="导出 LLM 调用审计日志（JSON）后退出")
     n4.set_defaults(func=_cmd_n4)
+
+    n5 = sub.add_parser("n5", help="SVA 生成：交付版与验证版、前件 cover、三方差分测试")
+    n5.add_argument("config", type=Path, help="status 为 confirmed 的 YAML 配置")
+    n5.add_argument("--workspace", type=Path, help="输出目录，默认 <root>/.verimine")
+    n5.add_argument("--dry-run", action="store_true", help="只跑不写库")
+    n5.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
+    n5.add_argument("--no-diff", action="store_true", help="不做三方差分测试")
+    n5.set_defaults(func=_cmd_n5)
 
     inf = sub.add_parser("infer", help="N0a 配置补全：从 RTL / .f / 不完整的 YAML 生成 YAML 草稿和推断报告")
     inf.add_argument("root", type=Path, nargs="?", default=Path("."), help="RTL 所在目录（给了 --config 时忽略）")
