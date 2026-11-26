@@ -108,7 +108,6 @@ def run_n5(
     n4 = n4_result
     n3, n2, n1, n0 = n4.n3, n4.n3.n2, n4.n3.n2.n1, n4.n3.n2.n1.n0
     norm = n0.normalized
-    root, design = n0.root, norm["design"]
     workspace = Path(workspace) if workspace else n0.workspace
     params = DEFAULTS | {k: v for k, v in norm.get("run", {}).get("params", {}).items() if k in DEFAULTS}
     if differential is not None:
@@ -135,31 +134,16 @@ def run_n5(
 
     # Step 4
     diff_info: dict = {"ran": False}
-    clocks = norm.get("clocks", [])
     if not params["n5_diff"]:
         diff_info["reason"] = "已关闭（n5_diff: false）"
-    elif not find_tools()[0]:
-        diff_info["reason"] = "没有形式引擎（sby / yosys / SMT 求解器）"
-    elif n1.yosys_report.blocked:
-        diff_info["reason"] = "Yosys 读不了设计（见 N1 基线）"
-    elif len(clocks) > 1:
-        diff_info["reason"] = "多时钟设计：向量按单一时钟驱动，暂不做差分测试"
     elif not rendered:
         diff_info["reason"] = "候选池为空"
     else:
-        vec = diff_mod.build_vector(n3.cases, d, params)
-        if vec is None:
-            diff_info["reason"] = "N3 没有可用作向量的测试用例"
+        setup = diff_setup(n4, params, (d, widths))
+        if isinstance(setup, str):
+            diff_info["reason"] = setup
         else:
-            files = [root / f for f in design.get("files", [])]
-            incdirs = [root / x for x in design.get("include_dirs", [])]
-            defines = {k: (str(v) if v is not None else None) for k, v in design.get("defines", {}).items()}
-            ctx = dict(instances=n1.elaboration.instances, files=files, include_dirs=incdirs, defines=defines,
-                       top=design["top"], root=root, scan=n2b_scan(files, design["top"], incdirs, defines, root),
-                       top_resets=norm.get("resets", []), top_clock=vec.clock, top_path=n1.elaboration.top_path,
-                       parameters=dict(design.get("parameters", {})))
-            diff_info = diff_mod.run(rendered, vec, d, lambda s: widths.get(s, {}), ctx, by_path, files, incdirs,
-                                     defines, work / "diff", params)
+            diff_info = diff_mod.run(rendered, workdir=work / "diff", params=params, **setup)
     if not diff_info["ran"]:
         log.warn("N5_NO_DIFF", f"未做三方差分测试：{diff_info['reason']}")
     else:
@@ -190,3 +174,31 @@ def run_n5(
         from verimine.n5.report import markdown
         (run_dir / "n5_report.md").write_text(markdown(res), encoding="utf-8")
     return res
+
+
+def diff_setup(n4: N4Result, params: dict, design_info: tuple | None = None) -> dict | str:
+    """Everything the differential test needs besides the properties (keyword arguments of
+    diff.run), or why it cannot run. Shared with N6, which re-tests what it re-rendered."""
+    n3, n2, n1, n0 = n4.n3, n4.n3.n2, n4.n3.n2.n1, n4.n3.n2.n1.n0
+    norm = n0.normalized
+    root, design = n0.root, norm["design"]
+    d, widths = design_info or _design(n2, norm, IssueLog())[:2]
+    if not find_tools()[0]:
+        return "没有形式引擎（sby / yosys / SMT 求解器）"
+    if n1.yosys_report.blocked:
+        return "Yosys 读不了设计（见 N1 基线）"
+    if len(norm.get("clocks", [])) > 1:
+        return "多时钟设计：向量按单一时钟驱动，暂不做差分测试"
+    vec = diff_mod.build_vector(n3.cases, d, params)
+    if vec is None:
+        return "N3 没有可用作向量的测试用例"
+    by_path = {i.path: i for i in n1.elaboration.instances}
+    files = [root / f for f in design.get("files", [])]
+    incdirs = [root / x for x in design.get("include_dirs", [])]
+    defines = {k: (str(v) if v is not None else None) for k, v in design.get("defines", {}).items()}
+    ctx = dict(instances=n1.elaboration.instances, files=files, include_dirs=incdirs, defines=defines,
+               top=design["top"], root=root, scan=n2b_scan(files, design["top"], incdirs, defines, root),
+               top_resets=norm.get("resets", []), top_clock=vec.clock, top_path=n1.elaboration.top_path,
+               parameters=dict(design.get("parameters", {})))
+    return dict(vec=vec, d=d, widths_of=lambda s: widths.get(s, {}), ctx=ctx, by_path=by_path, files=files,
+                include_dirs=incdirs, defines=defines)

@@ -291,6 +291,35 @@ def _cmd_n5(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_n6(args: argparse.Namespace) -> int:
+    from verimine.n6 import run_n6
+
+    try:
+        res = run_n6(args.config, workspace=args.workspace, write=not args.dry_run,
+                     rediff=False if args.no_diff else None)
+    except StageError as e:
+        for i in e.issues:
+            print(f"错误 {i}", file=sys.stderr)
+        return e.exit_code
+    if args.json:
+        print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False, sort_keys=True, default=str))
+        return 0
+    for w in res.n5.warnings + res.warnings:
+        print(f"警告 [{w['code']}] {w['message']}", file=sys.stderr)
+    c = res.counts()
+    print(f"N6 完成：属性 {c['props']}，通过 {c['ok']}，ENV_ERROR {c['env_error']}，重渲染 {c['rerendered']}；"
+          f"进入 N7 {c['to_n7']}")
+    for leg, name in (("delivery", "交付版（slang）"), ("verification", "验证版（Yosys）")):
+        g = res.legs[leg]
+        print(f"  {name}：" + (f"通过 {c[leg + '_ok']}" if g["ran"] else f"未检查，{g.get('reason')}"))
+    for p in res.props:
+        if p.status == "ENV_ERROR":
+            print(f"  ENV_ERROR {p.name}：{p.history[-1]['diags'][0] if p.history and p.history[-1]['diags'] else ''}")
+    if not args.dry_run:
+        print(f"  交付版 runs/{res.n5.n4.n3.n2.n1.n0.hashes['run_hash']}/n6_sva.sv、n6_bind.sv；报告 n6_report.md")
+    return 0
+
+
 def _cmd_infer(args: argparse.Namespace) -> int:
     from verimine.n0a import infer
 
@@ -442,6 +471,14 @@ def main(argv: list[str] | None = None) -> int:
     n5.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
     n5.add_argument("--no-diff", action="store_true", help="不做三方差分测试")
     n5.set_defaults(func=_cmd_n5)
+
+    n6 = sub.add_parser("n6", help="编译检查：slang 编译交付版、Yosys 读入验证版，失败的重渲染，最多 2 轮")
+    n6.add_argument("config", type=Path, help="status 为 confirmed 的 YAML 配置")
+    n6.add_argument("--workspace", type=Path, help="输出目录，默认 <root>/.verimine")
+    n6.add_argument("--dry-run", action="store_true", help="只跑不写库")
+    n6.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
+    n6.add_argument("--no-diff", action="store_true", help="重渲染的验证版不重做差分测试（N5 的差分测试照常）")
+    n6.set_defaults(func=_cmd_n6)
 
     inf = sub.add_parser("infer", help="N0a 配置补全：从 RTL / .f / 不完整的 YAML 生成 YAML 草稿和推断报告")
     inf.add_argument("root", type=Path, nargs="?", default=Path("."), help="RTL 所在目录（给了 --config 时忽略）")

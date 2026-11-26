@@ -49,6 +49,13 @@ _FAILED = re.compile(r"^\s*failed assertion (\S+) at .*? step (\d+)")
 _REACHED = re.compile(r"^\s*reached cover statement (\S+) at .*? step (\d+)")
 _UNREACHED = re.compile(r"^\s+(\S+) at \S+\s*$")
 _TRACE = re.compile(r"^\s*(?:counterexample|cover) trace(?: \[\w+\])?: (\S+)")
+_LABEL = re.compile(r"(\w+):\s*(?:assert|assume|cover)\b")
+
+
+def _label(text: str) -> str:
+    """Label of the check in a verification text (N6's may declare history registers first)."""
+    m = _LABEL.search(text)
+    return m.group(1) if m else ""
 
 
 @dataclass
@@ -277,7 +284,7 @@ def run(props: list[Prop], *, instances, files, include_dirs, defines, top: str,
     def lines_for(ps: list[Prop], negate: bool = False) -> dict[str, list[str]]:
         out: dict[str, set[str]] = {}
         for p in ps:
-            lab = p.verification.split(":", 1)[0].rsplit(" ", 1)[-1]
+            lab = _label(p.verification)
             text = negated_cover(p, "n" + lab) if negate else p.verification
             out.setdefault(p.module, set()).add("  " + text)
         return {k: sorted(v) for k, v in out.items()}
@@ -298,7 +305,7 @@ def run(props: list[Prop], *, instances, files, include_dirs, defines, top: str,
         results = {k: f.result() for k, f in jobs.items()}
 
     def lab_of(p):
-        return f"{p.inst}.{p.verification.split(':', 1)[0].rsplit(' ', 1)[-1]}"
+        return f"{p.inst}.{_label(p.verification)}"
 
     for name, r in results.items():
         res.runs.append({k: r[k] for k in ("task", "mode", "status")} | {"props": len(asserts if name == "bmc" else covers)})
