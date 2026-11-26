@@ -167,7 +167,9 @@ def run_sim(files, include_dirs, defines, checkers_text: str, tb_text: str, work
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=workdir)
         if r.returncode != 0:
-            return {"error": "Verilator 编译失败：" + " ".join((r.stdout + r.stderr).strip().splitlines()[:4])}
+            lines = (r.stdout + r.stderr).strip().splitlines()
+            errs = [x for x in lines if x.startswith("%Error")] or lines
+            return {"error": "Verilator 编译失败：" + " ".join(errs[:4])}
         r = subprocess.run([str(obj / "Vvm_n5_tb")], capture_output=True, text=True, timeout=timeout, cwd=workdir)
     except subprocess.TimeoutExpired:
         return {"error": "Verilator 超时"}
@@ -202,7 +204,7 @@ def env_lines(vec: Vector) -> list[str]:
     return L
 
 
-def run_formal(props: list[Prop], vec: Vector, ctx: dict, workdir: Path, timeout: int) -> dict:
+def run_formal(props: list[Prop], vec: Vector, ctx: dict, workdir: Path, timeout: int, render=None) -> dict:
     ps = [copy.deepcopy(p) for p in props]
     for p in ps:
         p.status, p.verification, p.skip, p.step, p.trace = "", "", "", None, ""
@@ -212,7 +214,7 @@ def run_formal(props: list[Prop], vec: Vector, ctx: dict, workdir: Path, timeout
     # Yosys registers clocked checks: a check on the values of step k is reported at step k + 1.
     res = engine.run(ps + [end], assumes=[], workdir=workdir, depth=vec.n + 2, timeout=timeout, prove=False,
                      extra_env=env_lines(vec), zero_init=True,
-                     render=lambda p, lab: R.n5_verification(p, lab),
+                     render=render or (lambda p, lab: R.n5_verification(p, lab)),
                      **{k: v for k, v in ctx.items() if k not in ("top_path", "parameters")})
     if not res.available:
         return {"error": "没有形式引擎（sby / yosys / SMT 求解器）"}
@@ -243,8 +245,9 @@ def _cut(sig: dict[str, list], n: int) -> dict[str, list]:
 
 
 def run(rendered, vec: Vector, d: Design, widths_of, ctx: dict, by_path: dict, files, include_dirs, defines,
-        workdir: Path, params: dict) -> dict:
-    """Fills r.diff for every rendered property; returns the run summary."""
+        workdir: Path, params: dict, render=None) -> dict:
+    """Fills r.diff for every rendered property; returns the run summary. render(prop, label)
+    overrides the verification text under test (N6 re-tests its re-renderings)."""
     timeout = int(params["n5_diff_timeout"])
     live = [r for r in rendered if r.delivery]
     # simulation
@@ -265,7 +268,7 @@ def run(rendered, vec: Vector, d: Design, widths_of, ctx: dict, by_path: dict, f
                   bench_text(top_inst, ctx.get("parameters", {}), vec, checkers), workdir / "sim", timeout)
     # formal
     vprops = [r.prop for r in rendered if r.verification]
-    formal = run_formal(vprops, vec, ctx, workdir / "formal", timeout) if vprops else {"error": "没有验证版属性"}
+    formal = run_formal(vprops, vec, ctx, workdir / "formal", timeout, render) if vprops else {"error": "没有验证版属性"}
 
     sim_sig = form_sig = None
     if "vcd" in sim:
