@@ -187,24 +187,31 @@ def pv_name(clock: dict) -> str:
     return f"vm_n2b_pv_{re.sub(r'\W', '_', clock['name'])}"
 
 
-def verification(p: Prop, label: str) -> str:
-    """One `always` block. Raises Unrenderable if Yosys cannot take it."""
+def verification(p: Prop, label: str, past_reset: bool | None = None, initstate: bool = True) -> str:
+    """One `always` block. Raises Unrenderable if Yosys cannot take it.
+
+    past_reset: also require the resets inactive in the previous cycle. Default (None): for
+    every property that looks back (N2b). `disable iff` itself only spans the attempt, so N5
+    passes p.next: a `$past` read alone does not extend it.
+    initstate: leave out the initial step (N2b). SVA checks the first clock tick too, so N5
+    passes False; properties with resets are still off there (reset is active initially)."""
     e = sv(p.expr, yosys=True)
     g = sv(p.guard, yosys=True) if p.guard else None
     past = p.next or uses_past(p.expr) or uses_past(p.guard)
-    gate = ["!$initstate"] + _inactive(p.resets)
+    gate = (["!$initstate"] if initstate else []) + _inactive(p.resets)
     if past:
         if not p.clock:
             raise Unrenderable("跨周期属性需要时钟")
         gate.append(pv_name(p.clock))
         ok = " && ".join(_inactive(p.resets))
-        if ok:
+        if ok and (past if past_reset is None else past_reset):
             gate.append(f"$past({ok})")
     if g:
         gg = f"$past({g})" if p.next else g
         e = f"!({gg}) || ({e})" if p.kind == "assert" else f"({gg}) && ({e})"
     ev = f"{p.clock['edge']} {p.clock['name']}" if p.clock else "*"
-    return f"always @({ev}) if ({' && '.join(gate)}) {label}: {p.kind}({e});"
+    cond = f"if ({' && '.join(gate)}) " if gate else ""
+    return f"always @({ev}) {cond}{label}: {p.kind}({e});"
 
 
 def negated_cover(p: Prop, label: str) -> str:

@@ -125,7 +125,7 @@ class _Design:
 
 
 def _run_sby(workdir: Path, task: str, mode: str, solver: str, depth: int, timeout: int,
-             design: _Design, sources: list[Path], incs: dict[str, str]) -> dict:
+             design: _Design, sources: list[Path], incs: dict[str, str], zero_init: bool = False) -> dict:
     inc = workdir / task / "inc"
     if (workdir / task).exists():
         shutil.rmtree(workdir / task)
@@ -152,6 +152,7 @@ proc
 tribuf -formal
 delete */*tribuf_conflict*
 prep -top {design.top}
+{"setundef -zero -init" if zero_init else ""}
 """, encoding="utf-8")
     out_dir = workdir / task / "run"
     try:
@@ -196,7 +197,12 @@ prep -top {design.top}
 def run(props: list[Prop], *, instances, files, include_dirs, defines, top: str, root: Path,
         scan: ScanResult, top_resets: list[dict], assumes: list[dict], top_clock: dict | None,
         workdir: Path, depth: int = 20, timeout: int = 120, prove: bool = True,
-        prove_max: int = 64, enabled: bool = True) -> EngineResult:
+        prove_max: int = 64, enabled: bool = True, extra_env: list[str] = (),
+        zero_init: bool = False, render=verification) -> EngineResult:
+    """For N5: render(prop, label) builds the verification text (N5 passes its own rendering,
+    so the text under test is the one it delivers); extra_env adds lines to the top module's
+    include (the differential test pins the inputs to a vector with them); zero_init starts
+    registers without an initial value at 0, as a 2-state simulator does, instead of arbitrary."""
     ok, solver = find_tools()
     res = EngineResult(available=ok and enabled, solver=solver, depth=depth, workdir=str(workdir))
     if not res.available:
@@ -214,7 +220,7 @@ def run(props: list[Prop], *, instances, files, include_dirs, defines, top: str,
     texts: dict[tuple[str, str], set[str]] = {}
     for p in props:
         try:
-            p.verification = verification(p, "LABEL")
+            p.verification = render(p, "LABEL")
         except Unrenderable as e:
             p.skip, p.status = str(e), "SKIPPED"
             continue
@@ -249,6 +255,7 @@ def run(props: list[Prop], *, instances, files, include_dirs, defines, top: str,
     else:
         res.warnings.append("配置中没有复位：寄存器初值任意，失败的断言可能来自不可达的初始状态")
     env_lines += _assume_lines(assumes, top_clock, res.warnings)
+    env_lines += list(extra_env)
 
     def incs(selected: dict[str, list[str]]) -> dict[str, str]:
         out = {}
@@ -279,7 +286,7 @@ def run(props: list[Prop], *, instances, files, include_dirs, defines, top: str,
     covers = [p for p in live if p.kind == "cover"]
 
     def go(task, mode, sel):
-        return _run_sby(workdir, task, mode, solver, depth, timeout, design, sources, incs(sel))
+        return _run_sby(workdir, task, mode, solver, depth, timeout, design, sources, incs(sel), zero_init)
 
     workers = max(1, min(8, os.cpu_count() or 1))
     with ThreadPoolExecutor(max_workers=workers) as pool:
