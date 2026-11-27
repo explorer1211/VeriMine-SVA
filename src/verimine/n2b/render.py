@@ -165,17 +165,19 @@ def _port_name(n: str) -> str:
     return n if _IDENT.match(n) else "vm_" + re.sub(r"\W", "_", n)
 
 
-def checker_module(mod_name: str, inst: str, props: list[Prop], widths: dict[str, tuple[int, bool]]) -> tuple[str, str]:
-    """(checker module text, bind statement) for one instance. widths: signal -> (width, signed)."""
+def checker_module(mod_name: str, inst: str, props: list[Prop], widths: dict[str, tuple[int, bool]],
+                   port=_port_name) -> tuple[str, str]:
+    """(checker module text, bind statement) for one instance. widths: signal -> (width, signed).
+    port(signal) names a port (default: the signal's name when it is a legal identifier)."""
     names = sorted(set().union(*(refs(p) for p in props)))
     ports = []
     for n in names:
         w, signed = widths.get(n, (1, False))
         rng = f" [{w - 1}:0]" if w > 1 else ""
-        ports.append(f"  input logic{' signed' if signed else ''}{rng} {_port_name(n)}")
+        ports.append(f"  input logic{' signed' if signed else ''}{rng} {port(n)}")
     body = "\n".join(f"  // [{p.check}] {p.message}\n  {p.delivery}" for p in props)
     text = f"// {inst}\nmodule {mod_name} (\n" + ",\n".join(ports) + "\n);\n" + body + "\nendmodule\n"
-    conns = ", ".join(f".{_port_name(n)}({n})" for n in names)
+    conns = ", ".join(f".{port(n)}({n})" for n in names)
     return text, f"bind {inst} {mod_name} u_{mod_name} ({conns});"
 
 
