@@ -320,6 +320,61 @@ def _cmd_n6(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_n7(args: argparse.Namespace) -> int:
+    from verimine.n7 import run_n7
+
+    try:
+        res = run_n7(args.config, workspace=args.workspace, write=not args.dry_run,
+                     loop_rounds=args.loop, backend=args.backend,
+                     mutants=0 if args.no_mutants else None)
+    except StageError as e:
+        for i in e.issues:
+            print(f"错误 {i}", file=sys.stderr)
+        return e.exit_code
+    if args.json:
+        print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False, sort_keys=True, default=str))
+        return 0
+    for w in res.warnings:
+        print(f"警告 [{w['code']}] {w['message']}", file=sys.stderr)
+    c = res.counts()
+    print(f"N7 完成：断言 {c['asserts']}，已证明 {c['PROVEN']}（{c['proven_ratio']:.0%}）"
+          if c["proven_ratio"] is not None else f"N7 完成：断言 {c['asserts']}，已证明 {c['PROVEN']}")
+    print("  状态：" + "，".join(f"{s} {c[s]}" for s in ("PROVEN", "BOUNDED", "FAILED", "VACUOUS", "WEAK_EVIDENCE",
+                                                       "REVIEW_REQUIRED", "ENV_ERROR") if c.get(s)))
+    coi = res.coverage["coi"]
+    print(f"  COI 覆盖 {coi['ratio']:.0%}（{coi['touched']}/{coi['blocks']} 块）；缺口 {res.gaps['block_count']} 块"
+          if coi["ratio"] is not None else f"  COI 覆盖 -；缺口 {res.gaps['block_count']} 块")
+    mk = res.coverage["proof_core"]
+    print(f"  变异杀伤 {mk['killed']}/{mk['total']}（{mk['ratio']:.0%}）" if mk.get("ratio") is not None
+          else f"  变异杀伤：{mk.get('basis')}")
+    for p in res.asserts:
+        if p.status in ("FAILED", "VACUOUS", "REVIEW_REQUIRED"):
+            print(f"  {p.status} {p.name}：{p.eliminated or (p.cand.text if p.cand else p.prop.message)}")
+    if not args.dry_run:
+        print(f"  报告 runs/{res.n6.n5.n4.n3.n2.n1.n0.hashes['run_hash']}/n7_report.md")
+    return 0
+
+
+def _cmd_capacity(args: argparse.Namespace) -> int:
+    from verimine import capacity
+
+    tiers = [1, 2, 3, 4] if args.tiers == "all" else [int(x) for x in args.tiers.split(",") if x.strip()]
+    res = capacity.run(tiers, timeout=args.timeout, workspace=args.workspace, budget=args.budget)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0
+    for t in res["tiers"]:
+        print(f"档 {t['tier']}（约 {t['target_lines']} 行，实际 {t['lines']}）：slang {'通过' if t['slang']['ok'] else '失败'}"
+              f" {t['slang']['seconds']}s；Yosys {'通过' if t['yosys'].get('ok') else '失败'}"
+              f" {t['yosys'].get('seconds', '-')}s；L0 深度 {t['l0'].get('max_depth')}；"
+              f"L1 {'通过' if t['l1'].get('ok') else t['l1'].get('status', '-')}")
+    print("能力声明：" + res["capability"]["text"])
+    if not args.no_write:
+        out = capacity.write(res, args.workspace or Path(".verimine"))
+        print(f"  报告 {out['markdown']}")
+    return 0
+
+
 def _cmd_infer(args: argparse.Namespace) -> int:
     from verimine.n0a import infer
 
@@ -479,6 +534,25 @@ def main(argv: list[str] | None = None) -> int:
     n6.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
     n6.add_argument("--no-diff", action="store_true", help="重渲染的验证版不重做差分测试（N5 的差分测试照常）")
     n6.set_defaults(func=_cmd_n6)
+
+    n7 = sub.add_parser("n7", help="验证、覆盖与闭环：S_val 离线检查、cover 空洞性、分层证明、COI 覆盖、缺口")
+    n7.add_argument("config", type=Path, help="status 为 confirmed 的 YAML 配置")
+    n7.add_argument("--workspace", type=Path, help="输出目录，默认 <root>/.verimine")
+    n7.add_argument("--dry-run", action="store_true", help="只跑不写库")
+    n7.add_argument("--json", action="store_true", help="以 JSON 输出完整结果")
+    n7.add_argument("--loop", type=int, metavar="R", help="覆盖驱动闭环最多 R 轮（缺口 → N4 → N5 → N6 → N7）")
+    n7.add_argument("--backend", choices=["thread", "process", "slurm"], help="证明任务的并行方式")
+    n7.add_argument("--no-mutants", action="store_true", help="不做变异杀伤")
+    n7.set_defaults(func=_cmd_n7)
+
+    cp = sub.add_parser("capacity", help="容量测试：四档规模下的读入耗时/内存、L0 深度、L1 可证性，产出能力声明")
+    cp.add_argument("--tiers", default="1,2", help="档位，逗号分隔（1–4），或 all")
+    cp.add_argument("--timeout", type=int, default=120, help="每次工具调用的超时（秒）")
+    cp.add_argument("--budget", type=int, default=120, help="每档的总时间预算（秒）")
+    cp.add_argument("--workspace", type=Path, help="输出目录，默认 .verimine")
+    cp.add_argument("--no-write", action="store_true", help="不写报告")
+    cp.add_argument("--json", action="store_true")
+    cp.set_defaults(func=_cmd_capacity)
 
     inf = sub.add_parser("infer", help="N0a 配置补全：从 RTL / .f / 不完整的 YAML 生成 YAML 草稿和推断报告")
     inf.add_argument("root", type=Path, nargs="?", default=Path("."), help="RTL 所在目录（给了 --config 时忽略）")

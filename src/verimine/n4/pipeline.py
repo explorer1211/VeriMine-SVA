@@ -84,6 +84,7 @@ def run_n4(
     env: dict | None = None,
     tools: dict | None = None,
     write: bool = True,
+    extra_gaps: dict[str, set[str]] | None = None,
 ) -> N4Result:
     if n3_result is None:
         n3_result = run_n3(config_path, workspace=workspace, env=env, tools=tools, write=write)
@@ -114,6 +115,7 @@ def run_n4(
         "build_hash": n0.hashes["build_hash"], "params": params,
         "llm": llm_cfg if llm_cfg.get("mode") != "off" else {"mode": "off"},
         "prompt_set": llm_mod.PROMPT_SET_VERSION, "n4_version": N4_VERSION,
+        "extra_gaps": sorted((k, sorted(v)) for k, v in (extra_gaps or {}).items()),
     })
 
     # Path A
@@ -166,6 +168,8 @@ def run_n4(
     if params["n4_use_pagerank"]:
         log.warn("N4_PAGERANK_FTO", "按重要性（PageRank）排序是 FTO 敏感功能，只作并列时的辅助")
     gaps = pool.gap_signals(n3.coverage)
+    for k, v in (extra_gaps or {}).items():     # N7's gap list (spec N7 item 9)
+        gaps.setdefault(k, set()).update(v)
     bud = pool.budget(cands, gaps, params, importance)
 
     _assign_ids(cands, top)

@@ -114,8 +114,10 @@ def ir_hits(p: Prop, sig: dict[str, list], n: int, widths: dict[str, int], ante:
 # Simulation (delivery version)
 # --------------------------------------------------------------------------- #
 
-def bench_text(top_inst, params: dict, vec: Vector, checkers: list[tuple[str, str, list[str]]]) -> str:
-    """checkers: (checker module, instance path, signal names relative to it)."""
+def bench_text(top_inst, params: dict, vec: Vector, checkers: list[tuple[str, str, list[str]]],
+               port=_port_name) -> str:
+    """checkers: (checker module, instance path, signal names relative to it). port(signal) is
+    the port name the checker module uses (N7's mutation checkers rename theirs)."""
     clk = vec.clock
     act, inact = ("1", "0") if clk["edge"] == "posedge" else ("0", "1")
     L = ["`timescale 1ns/1ps", "module vm_n5_tb;", f"  reg {clk['name']} = 1'b{inact};", "  integer vm_n5_cyc = 0;"]
@@ -138,7 +140,7 @@ def bench_text(top_inst, params: dict, vec: Vector, checkers: list[tuple[str, st
     for k, (mod, inst, names) in enumerate(checkers):
         rel = inst[len(top):].lstrip(".")
         base = "vm_n5_tb.dut" + (f".{rel}" if rel else "")
-        cs = ", ".join(f".{_port_name(n)}({base}.{n})" for n in names)
+        cs = ", ".join(f".{port(n)}({base}.{n})" for n in names)
         L.append(f"  {mod} vm_n5_c{k} ({cs});")
     L += ["  initial begin", '    $dumpfile("trace.vcd");', "    $dumpvars(0, dut);"]
     for i, row in enumerate(vec.rows):
